@@ -1,0 +1,24 @@
+{
+    "name": "mks-plugins/crypto-pay",
+    "description": "CoinPayments 加密货币支付：付费订阅文章",
+    "type": "mks-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CMSForum"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\CryptoPay\\": "src/"
+        }
+    },
+    "extra": {
+        "mks-plugin": {
+            "class": "Modules\\CryptoPay\\CryptoPayPlugin"
+        }
+    }
+}

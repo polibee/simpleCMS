@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'navigation_label' => 'میدیا',
+    'navigation_library' => 'کتێبخانەی میدیا',
+    'navigation_create' => 'زیادکردنی وێنە / فایل',
+    'model_label' => 'میدیا',
+    'plural_model_label' => 'میدیا',
+    'disk' => 'دیسک',
+    'file' => 'فایل',
+    'name' => 'ناو',
+    'file_name' => 'ناوی فایل',
+    'mime_type' => 'جۆری MIME',
+    'size_bytes' => 'قەبارە (بایت)',
+    'width' => 'پانی',
+    'height' => 'بەرزی',
+    'path' => 'ڕێگا',
+    'url' => 'URL',
+    'preview' => 'پێشبینین',
+    'type' => 'جۆر',
+    'size' => 'قەبارە',
+    'dimensions' => 'قەبارەکان',
+    'attachments' => 'هاوپێچەکان',
+    'created' => 'دروستکراو',
+    'file_information' => 'زانیاری فایل',
+    'details' => 'وردەکارییەکان',
+];

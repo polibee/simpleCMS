@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'navigation_label' => '评论',
+    'model_label' => '评论',
+    'plural_model_label' => '评论',
+    'post' => '文章',
+    'author' => '作者',
+    'content' => '内容',
+    'status' => '状态',
+    'date' => '日期',
+    'approve' => '批准',
+    'comment_approved' => '评论已批准',
+    'ip_address' => 'IP 地址',
+    'reply' => '回复',
+    'reply_content' => '回复内容',
+    'mark_as_spam' => '标记垃圾',
+    'marked_as_spam' => '已标记垃圾',
+    'move_to_trash' => '移入回收站',
+    'moved_to_trash' => '已移入回收站',
+    'approve_selected' => '批量批准',
+    'tab_pending' => '待审核',
+    'tab_approved' => '已批准',
+    'tab_all' => '全部',
+    'tab_spam' => '垃圾',
+    'tab_trash' => '回收站',
+];

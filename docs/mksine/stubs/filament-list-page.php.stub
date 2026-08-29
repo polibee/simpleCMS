@@ -1,0 +1,12 @@
+<?php
+
+namespace {{ namespace }}\Filament\Resources\{{ resourceName }}\Pages;
+
+use {{ namespace }}\Filament\Resources\Pages\MksineListRecords;
+use {{ namespace }}\Filament\Resources\{{ resourceName }}\{{ resourceName }}Resource;
+
+class List{{ modelPlural }} extends MksineListRecords
+{
+    protected static string $resource = {{ resourceName }}Resource::class;
+}
+

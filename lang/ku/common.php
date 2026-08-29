@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'system' => 'سیستەم',
+    'content' => 'ناوەڕۆک',
+    'appearance' => 'دەرکەوتن',
+    'tools' => 'ئامرازەکان',
+    'access_control' => 'کۆنترۆڵی دەستگەیشتن',
+    'access_rights' => 'مافی دەستگەیشتن',
+    'media_group' => 'میدیا',
+    'menus_group' => 'پێڕستەکان',
+    'users_group' => 'بەکارهێنەران',
+    'theme_plugins_group' => 'ڕووکار و پێوەکراوەکان',
+    'seo' => 'سێئۆ',
+    'yes' => 'بەڵێ',
+    'no' => 'نەخێر',
+    'all' => 'هەموو',
+    'close' => 'داخستن',
+    'sidebar_collapse' => 'کۆکردنەوەی پێڕست',
+    'sidebar_expand' => 'فراوانکردنی پێڕست',
+    'sidebar_search_label' => 'گەڕان لە پێڕستی بەڕێوەبردن',
+    'sidebar_search_placeholder' => 'گەڕان لە پێڕست…',
+    'sidebar_search_clear' => 'سڕینەوەی گەڕان',
+    'more_actions' => 'کردارەکانی زیاتر',
+];

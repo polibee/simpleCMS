@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'system' => '系统',
+    'content' => '内容',
+    'appearance' => '外观',
+    'tools' => '工具',
+    'access_control' => '访问控制',
+    'access_rights' => '访问权限',
+    'media_group' => '媒体',
+    'menus_group' => '菜单',
+    'users_group' => '用户',
+    'theme_plugins_group' => '主题与插件',
+    'seo' => 'SEO',
+    'yes' => '是',
+    'no' => '否',
+    'all' => '全部',
+    'close' => '关闭',
+    'sidebar_collapse' => '收起菜单',
+    'sidebar_expand' => '展开菜单',
+    'sidebar_search_label' => '搜索后台菜单',
+    'sidebar_search_placeholder' => '搜索菜单…',
+    'sidebar_search_clear' => '清除搜索',
+    'more_actions' => '更多操作',
+];

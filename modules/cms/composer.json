@@ -1,0 +1,24 @@
+{
+    "name": "mks-plugins/cms",
+    "description": "内容管理：文章/分类/标签/多形态展示",
+    "type": "mks-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CMSForum"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\CMS\\": "src/"
+        }
+    },
+    "extra": {
+        "mks-plugin": {
+            "class": "Modules\\CMS\\CmsPlugin"
+        }
+    }
+}

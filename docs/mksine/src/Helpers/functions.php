@@ -1,0 +1,352 @@
+<?php
+
+use Miran\Mksine\Core\Theme\ThemeManager;
+
+if (! function_exists('mks_setting')) {
+    /**
+     * Get a MKSine setting value by key.
+     */
+    function mks_setting(string $key): mixed
+    {
+        return \Miran\Mksine\Models\Setting::where('key', $key)->first()?->value;
+    }
+}
+
+if (! function_exists('mks_setting_media_url')) {
+    /**
+     * Resolve a public URL for a setting that stores a single Media id (or JSON array of ids).
+     */
+    function mks_setting_media_url(string $key): ?string
+    {
+        $raw = mks_setting($key);
+
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $id = null;
+
+        if (is_numeric($raw)) {
+            $id = (int) $raw;
+        } elseif (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed !== '' && str_starts_with($trimmed, '[')) {
+                $decoded = json_decode($trimmed, true);
+                if (is_array($decoded) && isset($decoded[0]) && is_numeric($decoded[0])) {
+                    $id = (int) $decoded[0];
+                }
+            } elseif (is_numeric($trimmed)) {
+                $id = (int) $trimmed;
+            }
+        }
+
+        if ($id === null || $id < 1) {
+            return null;
+        }
+
+        $media = \Miran\Mksine\Models\Media::query()->find($id);
+
+        if ($media === null) {
+            return null;
+        }
+
+        return $media->full_url;
+    }
+}
+
+if (! function_exists('mksine_pb_media_url')) {
+    /**
+     * Resolve a media library URL for page builder blocks, or a theme asset path fallback.
+     *
+     * @param  int|string|null  $mediaId  Stored media id from MediaPicker (isRelation false)
+     */
+    function mksine_pb_media_url(mixed $mediaId, string $fallbackThemeAssetPath): string
+    {
+        if (is_numeric($mediaId) && (int) $mediaId > 0) {
+            $media = \Miran\Mksine\Models\Media::query()->find((int) $mediaId);
+
+            if ($media !== null && $media->full_url !== null && $media->full_url !== '') {
+                return $media->full_url;
+            }
+        }
+
+        return theme_asset($fallbackThemeAssetPath);
+    }
+}
+
+if (! function_exists('theme_manager')) {
+    /**
+     * Get the ThemeManager instance.
+     */
+    function theme_manager(): ThemeManager
+    {
+        return app(ThemeManager::class);
+    }
+}
+
+if (! function_exists('theme_asset')) {
+    /**
+     * Get the URL for a theme asset.
+     */
+    function theme_asset(string $path): string
+    {
+        return theme_manager()->asset($path);
+    }
+}
+
+if (! function_exists('theme_view')) {
+    /**
+     * Get the full view name for a theme view.
+     */
+    function theme_view(string $view): string
+    {
+        return theme_manager()->view($view);
+    }
+}
+
+if (! function_exists('theme_layout')) {
+    /**
+     * Get the theme layout view name.
+     */
+    function theme_layout(): string
+    {
+        return theme_manager()->layout();
+    }
+}
+
+if (! function_exists('mksine_site_display_name')) {
+    /**
+     * Public site name for titles (settings or app name).
+     */
+    function mksine_site_display_name(): string
+    {
+        $name = trim((string) (mks_setting('site_name') ?: config('app.name', 'MKSine')));
+
+        return $name !== '' ? $name : 'MKSine';
+    }
+}
+
+if (! function_exists('mksine_document_title')) {
+    /**
+     * Browser <title>: use meta_title when set, otherwise "defaultTitle — site name".
+     */
+    function mksine_document_title(?string $metaTitle, string $defaultTitle): string
+    {
+        $meta = trim((string) $metaTitle);
+        if ($meta !== '') {
+            return $meta;
+        }
+
+        $base = trim($defaultTitle);
+        $site = mksine_site_display_name();
+        if ($base === '') {
+            return $site;
+        }
+
+        return $base.' — '.$site;
+    }
+}
+
+if (! function_exists('mks_render_content')) {
+    /**
+     * Render rich HTML content with registered shortcodes.
+     */
+    function mks_render_content(?string $html, ?\Miran\Mksine\Core\Shortcodes\ShortcodeContext $context = null): string
+    {
+        if ($context === null && \Illuminate\Support\Facades\View::shared('mksShortcodeContext') instanceof \Miran\Mksine\Core\Shortcodes\ShortcodeContext) {
+            $context = \Illuminate\Support\Facades\View::shared('mksShortcodeContext');
+        }
+
+        return app(\Miran\Mksine\Core\Shortcodes\ContentRenderer::class)->render($html, $context);
+    }
+}
+
+if (! function_exists('mks_strip_shortcodes')) {
+    /**
+     * Remove shortcode tags from content (for excerpts and meta snippets).
+     */
+    function mks_strip_shortcodes(?string $html): string
+    {
+        return \Miran\Mksine\Core\Shortcodes\ShortcodeProcessor::stripShortcodes($html);
+    }
+}
+
+if (! function_exists('mks_shortcode_context')) {
+    function mks_shortcode_context(
+        ?\Miran\Mksine\Models\Page $page = null,
+        ?\Miran\Mksine\Models\Post $post = null,
+        ?\Miran\Mksine\Models\Category $category = null,
+    ): \Miran\Mksine\Core\Shortcodes\ShortcodeContext {
+        return \Miran\Mksine\Core\Shortcodes\ShortcodeContext::make(
+            page: $page,
+            post: $post,
+            category: $category,
+        );
+    }
+}
+
+if (! function_exists('mksine_meta_description')) {
+    /**
+     * Meta description: meta_description when set, otherwise plain text from HTML body (truncated).
+     *
+     * @return string|null Plain text; escape when outputting in Blade.
+     */
+    function mksine_meta_description(?string $metaDescription, ?string $fallbackHtmlOrText, int $maxLength = 160): ?string
+    {
+        $meta = trim((string) $metaDescription);
+        if ($meta !== '') {
+            return $meta;
+        }
+
+        $plain = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $fallbackHtmlOrText)) ?? '');
+        if ($plain === '') {
+            return null;
+        }
+
+        return \Illuminate\Support\Str::limit($plain, $maxLength, '');
+    }
+}
+
+if (! function_exists('active_theme')) {
+    /**
+     * Get the active theme data.
+     */
+    function active_theme(): ?\Miran\Mksine\Core\Theme\ThemeData
+    {
+        return theme_manager()->getActive();
+    }
+}
+
+if (! function_exists('theme_enqueue')) {
+    /**
+     * Get the ThemeEnqueue instance (WordPress-style enqueue API).
+     */
+    function theme_enqueue(): \Miran\Mksine\Core\Theme\ThemeEnqueue
+    {
+        return app(\Miran\Mksine\Core\Theme\ThemeEnqueue::class);
+    }
+}
+
+if (! function_exists('theme_enqueue_style')) {
+    /**
+     * Enqueue a CSS file. Output when @themeAssets is rendered. No Blade edit needed.
+     *
+     * @param  array<string, string>  $attributes  e.g. ['media' => 'print']
+     */
+    function theme_enqueue_style(string $url, array $attributes = []): void
+    {
+        theme_enqueue()->enqueueStyle($url, $attributes);
+    }
+}
+
+if (! function_exists('theme_enqueue_script')) {
+    /**
+     * Enqueue a JS file. Output when @themeAssets is rendered. No Blade edit needed.
+     *
+     * @param  array<string, string>  $attributes  e.g. ['defer' => 'defer']
+     */
+    function theme_enqueue_script(string $url, array $attributes = []): void
+    {
+        theme_enqueue()->enqueueScript($url, $attributes);
+    }
+}
+
+if (! function_exists('theme_register_override')) {
+    /**
+     * Register a theme override for a frontend page (call from theme.php or theme code).
+     * Page keys: home, category-list, category-show, post-list, post-show, page-show, author-show.
+     */
+    function theme_register_override(string $page, string $componentClass): void
+    {
+        app(\Miran\Mksine\Core\Theme\ThemeRegistry::class)->registerOverride($page, $componentClass);
+    }
+}
+
+if (! function_exists('theme_register_routes')) {
+    /**
+     * Register extra routes for the active theme (call from theme.php).
+     * Callback receives nothing; use Route:: facade inside it.
+     *
+     * @param  callable(): void  $callback
+     */
+    function theme_register_routes(callable $callback): void
+    {
+        app(\Miran\Mksine\Core\Theme\ThemeRegistry::class)->registerRoutes($callback);
+    }
+}
+
+if (! function_exists('theme_bootstrap')) {
+    /**
+     * Load active theme's theme.php (run once at start of web routes).
+     */
+    function theme_bootstrap(): void
+    {
+        app(\Miran\Mksine\Core\Theme\ThemeBootstrap::class)->boot();
+    }
+}
+
+if (! function_exists('theme_add_action')) {
+    /**
+     * Add a callback to a theme template hook (WordPress-style). Fired when @themeDoAction($hook) runs.
+     *
+     * @param  string  $hook  e.g. 'home.before_hero', 'home.after_section_latest'
+     * @param  callable  $callback  Function that may return HTML string or echo
+     * @param  int  $priority  Lower runs first (default 10)
+     */
+    function theme_add_action(string $hook, callable $callback, int $priority = 10): void
+    {
+        app(\Miran\Mksine\Core\Theme\ThemeActionManager::class)->addAction($hook, $callback, $priority);
+    }
+}
+
+if (! function_exists('mks_date_calendar')) {
+    /**
+     * Active display calendar: {@see \Miran\Mksine\Support\MksDateFormatter::GREGORIAN} or {@see \Miran\Mksine\Support\MksDateFormatter::SHAMSI}.
+     */
+    function mks_date_calendar(): string
+    {
+        return \Miran\Mksine\Support\MksDateFormatter::calendar();
+    }
+}
+
+if (! function_exists('mks_is_shamsi_calendar')) {
+    function mks_is_shamsi_calendar(): bool
+    {
+        return \Miran\Mksine\Support\MksDateFormatter::isShamsi();
+    }
+}
+
+if (! function_exists('mks_format_date')) {
+    function mks_format_date(
+        \DateTimeInterface|string|null $date,
+        ?string $format = null,
+        ?string $timezone = null,
+    ): ?string {
+        return \Miran\Mksine\Support\MksDateFormatter::formatDate($date, $format, $timezone);
+    }
+}
+
+if (! function_exists('mks_format_datetime')) {
+    function mks_format_datetime(
+        \DateTimeInterface|string|null $date,
+        ?string $format = null,
+        ?string $timezone = null,
+    ): ?string {
+        return \Miran\Mksine\Support\MksDateFormatter::formatDateTime($date, $format, $timezone);
+    }
+}
+
+if (! function_exists('theme_do_action')) {
+    /**
+     * Fire a theme template hook: run all callbacks registered with theme_add_action($hook).
+     * Returns concatenated output; use in Blade via @themeDoAction('hook_name').
+     *
+     * @param  string  $hook  Hook name
+     * @param  array<string, mixed>  $args  Optional arguments passed to each callback
+     * @return string Combined output from all callbacks
+     */
+    function theme_do_action(string $hook, array $args = []): string
+    {
+        return app(\Miran\Mksine\Core\Theme\ThemeActionManager::class)->doAction($hook, $args);
+    }
+}

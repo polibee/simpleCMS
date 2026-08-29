@@ -1,0 +1,48 @@
+<?php
+
+return [
+    'accepted' => ':attribute 必须接受。',
+    'active_url' => ':attribute 不是一个有效的网址。',
+    'after' => ':attribute 必须是一个在 :date 之后的日期。',
+    'alpha' => ':attribute 只能包含字母。',
+    'alpha_dash' => ':attribute 只能包含字母、数字和短横线。',
+    'alpha_num' => ':attribute 只能包含字母和数字。',
+    'array' => ':attribute 必须是一个数组。',
+    'before' => ':attribute 必须是一个在 :date 之前的日期。',
+    'between' => [
+        'array' => ':attribute 必须有 :min - :max 个元素。',
+        'file' => ':attribute 必须介于 :min - :max 千字节。',
+        'numeric' => ':attribute 必须介于 :min - :max。',
+        'string' => ':attribute 必须介于 :min - :max 个字符。',
+    ],
+    'confirmed' => ':attribute 两次输入不一致。',
+    'current_password' => '密码不正确。',
+    'date' => ':attribute 不是一个有效的日期。',
+    'email' => ':attribute 必须是有效的邮箱地址。',
+    'in' => '选定的 :attribute 无效。',
+    'integer' => ':attribute 必须是一个整数。',
+    'max' => [
+        'array' => ':attribute 最多只能有 :max 个元素。',
+        'file' => ':attribute 不能大于 :max 千字节。',
+        'numeric' => ':attribute 不能大于 :max。',
+        'string' => ':attribute 不能大于 :max 个字符。',
+    ],
+    'min' => [
+        'array' => ':attribute 至少要有 :min 个元素。',
+        'file' => ':attribute 至少要有 :min 千字节。',
+        'numeric' => ':attribute 至少要大于 :min。',
+        'string' => ':attribute 至少要有 :min 个字符。',
+    ],
+    'numeric' => ':attribute 必须是一个数字。',
+    'required' => ':attribute 不能为空。',
+    'same' => ':attribute 和 :other 必须匹配。',
+    'size' => [
+        'array' => ':attribute 必须包含 :size 个元素。',
+        'file' => ':attribute 必须是 :size 千字节。',
+        'numeric' => ':attribute 必须是 :size。',
+        'string' => ':attribute 必须是 :size 个字符。',
+    ],
+    'string' => ':attribute 必须是一个字符串。',
+    'unique' => ':attribute 已被占用。',
+    'url' => ':attribute 格式无效。',
+];

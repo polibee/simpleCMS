@@ -1,0 +1,24 @@
+{
+    "name": "mks-plugins/economy",
+    "description": "货币内核（金币/银币/铜币，可自定义名称）",
+    "type": "mks-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CMSForum"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Economy\\": "src/"
+        }
+    },
+    "extra": {
+        "mks-plugin": {
+            "class": "Modules\\Economy\\EconomyPlugin"
+        }
+    }
+}

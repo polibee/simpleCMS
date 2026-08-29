@@ -1,0 +1,24 @@
+{
+    "name": "mks-plugins/user",
+    "description": "用户中心与注册流程模块",
+    "type": "mks-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CMSForum"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\User\\": "src/"
+        }
+    },
+    "extra": {
+        "mks-plugin": {
+            "class": "Modules\\User\\UserPlugin"
+        }
+    }
+}

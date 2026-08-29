@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'navigation_label' => '用户',
+    'navigation_list' => '用户列表',
+    'model_label' => '用户',
+    'plural_model_label' => '用户',
+    'avatar' => '头像',
+    'name' => '昵称',
+    'email' => '邮箱',
+    'bio' => '简介',
+    'date_of_birth' => '出生日期',
+    'country_code' => '国家区号',
+    'phone_number' => '手机号',
+    'password' => '密码',
+    'password_leave_blank' => '留空保持当前密码不变。',
+    'created_at' => '创建时间',
+    'phone' => '手机',
+    'section_profile' => '个人资料',
+    'section_security' => '安全设置',
+    'section_notifications' => '通知',
+    'section_appearance' => '外观',
+    'section_advanced' => '高级',
+    'section_permissions' => '权限',
+    'section_roles' => '角色',
+    'section_contact' => '联系方式',
+];

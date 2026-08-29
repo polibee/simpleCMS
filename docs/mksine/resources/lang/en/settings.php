@@ -1,0 +1,33 @@
+<?php
+
+return [
+    'navigation_label' => 'Settings',
+    'title' => 'Settings',
+    'save' => 'Save',
+    'save_success' => 'Settings saved successfully',
+    'tabs' => [
+        'general' => 'General',
+        'permalinks' => 'Permalinks',
+        'extensions' => 'Extensions',
+    ],
+    'site_name' => 'Site Name',
+    'short_site_name' => 'Short Site Name',
+    'date_calendar' => 'Date calendar',
+    'date_calendar_gregorian' => 'Gregorian (Miladi)',
+    'date_calendar_shamsi' => 'Shamsi (Jalali)',
+    'date_calendar_helper' => 'How dates are shown in the admin panel and plugins. Data is always stored in the Gregorian calendar.',
+    'logo' => 'Logo',
+    'favicon' => 'Favicon',
+    'front_page' => 'Front Page',
+    'front_page_helper' => 'Choose which page to show as the site home. Leave empty for default (latest posts).',
+    'front_page_default' => 'Default (latest posts)',
+    'home_page_url' => 'Home Page URL',
+    'categories_url' => 'Categories URL',
+    'single_category_url' => 'Single Category URL',
+    'single_category_url_helper' => 'Use {path} for category path (e.g. parent/child slug)',
+    'posts_url' => 'Posts URL',
+    'single_post_url' => 'Single Post URL',
+    'single_post_url_helper' => 'Use {slug} for post slug placeholder',
+    'page_url' => 'Page URL',
+    'page_url_helper' => 'Use {slug} for page slug placeholder',
+];

@@ -1,0 +1,24 @@
+{
+    "name": "mks-plugins/quest",
+    "description": "签到与内容发布任务（货币奖励规则）",
+    "type": "mks-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CMSForum"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Quest\\": "src/"
+        }
+    },
+    "extra": {
+        "mks-plugin": {
+            "class": "Modules\\Quest\\QuestPlugin"
+        }
+    }
+}

@@ -1,0 +1,7 @@
+@import 'tailwindcss' source(none);
+
+/* Scan this plugin's PHP source and Blade views for Tailwind classes */
+@source '../../src';
+@source '../views';
+
+/* Plugin-specific styles */
