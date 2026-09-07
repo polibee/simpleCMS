@@ -1,8 +1,8 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "polibee/simplecms",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "simpleCMS - plugin-based content community platform (CMS + BBS) built with Laravel 13, Filament 5 and Inertia/Vue 3."
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "repositories": [

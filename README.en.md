@@ -1,4 +1,4 @@
-# CMSForum
+# simpleCMS
 
 > [**中文**](README.md) · **English**
 
@@ -47,6 +47,8 @@ The underlying CMS foundation is provided by the [`miran/mksine`](https://github
 | Backend | PHP ^8.3 · Laravel 13.27 · Filament 5.7 · Livewire 4.4 · miran/mksine 1.4 · Filament Shield 4.3 · spatie/laravel-permission 8.3 |
 | Frontend | Vue 3.5 · Inertia 3.7 · Vite 8 · Tailwind CSS 4 · TypeScript |
 | Infrastructure | Horizon 5.48 · Octane 2.19 · Redis (optional) · CoinPayments SDK |
+
+> 🚀 **Powered by Vast.ai** (unofficial support — the author's personal setup): this project is developed, built and demo-hosted on [Vast.ai](https://cloud.vast.ai/?ref_id=91181) GPU cloud servers. Vast.ai is the world's largest decentralized GPU marketplace — rent RTX 4090 / A100 instances by the hour for model inference, CI builds, cloud hosting and more. If you need elastic compute, sign up via [this referral link](https://cloud.vast.ai/?ref_id=91181).
 
 ## 🌱 Prerequisites
 

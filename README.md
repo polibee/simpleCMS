@@ -1,4 +1,4 @@
-# CMSForum
+# simpleCMS
 
 > **中文** · [English](README.en.md)
 
@@ -47,6 +47,8 @@
 | 后端 | PHP ^8.3 · Laravel 13.27 · Filament 5.7 · Livewire 4.4 · miran/mksine 1.4 · Filament Shield 4.3 · spatie/laravel-permission 8.3 |
 | 前台 | Vue 3.5 · Inertia 3.7 · Vite 8 · Tailwind CSS 4 · TypeScript |
 | 基础设施 | Horizon 5.48 · Octane 2.19 · Redis（可选）· CoinPayments SDK |
+
+> 🚀 **由 Vast.ai 提供算力支持**（非官方支持，作者个人使用）：本项目开发、构建与线上演示跑在 [Vast.ai](https://cloud.vast.ai/?ref_id=91181) 的 GPU 云服务器上。Vast.ai 是全球最大的去中心化 GPU 市场，按小时租用 RTX 4090 / A100 等显卡实例，适合模型推理、CI 构建、云托管等场景。如果你也需要弹性算力，可以通过 [这个推荐链接](https://cloud.vast.ai/?ref_id=91181) 注册。
 
 ## 🌱 基础环境
 
