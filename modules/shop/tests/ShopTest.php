@@ -121,4 +121,78 @@ class ShopTest extends ModuleTestCase
             ->assertInertia(fn ($page) => $page
                 ->where('products.0.image_url', url('/images/product-placeholder.svg')));
     }
+
+    public function test_guest_purchase_requires_email_and_creates_order(): void
+    {
+        $product = $this->product();
+        $product->update([
+            'delivery_type' => 'email',
+            'delivery_payload' => "账号: smart@demo.com\n密码: demo12345",
+        ]);
+
+        // 游客未填邮箱 → 校验失败
+        $this->post('/shop/buy', ['slug' => $product->slug])->assertSessionHasErrors(['guest_email']);
+
+        // 游客填邮箱 + Mock 通道 → 创建订单并保存 guest_email
+        $resp = $this->post('/shop/buy', [
+            'slug' => $product->slug,
+            'method' => 'mock',
+            'guest_email' => 'guest@buyer.com',
+        ]);
+
+        $order = ShopOrder::query()->where('guest_email', 'guest@buyer.com')->firstOrFail();
+        $resp->assertRedirect("/shop/mock/{$order->order_no}");
+        $this->assertNull($order->user_id, '游客订单不绑定用户');
+        $this->assertSame('guest@buyer.com', $order->guest_email);
+        $this->assertSame('pending', $order->status);
+
+        // Mock 收银台确认（游客按 guest_email 验证）→ 支付 + 邮件交付
+        $this->post("/shop/mock/{$order->order_no}", ['guest_email' => 'guest@buyer.com'])
+            ->assertRedirect('/shop/orders');
+
+        $order->refresh();
+        $this->assertSame('paid', $order->status);
+        $this->assertSame(4, $product->fresh()->stock, '库存应扣减 1');
+
+        // 邮件交付状态：delivered_data 记录目标邮箱，email_sent_at 已写入。
+        // （Mail::raw 在 MailFake 下是空实现，无法用 assertSentCount 断言，
+        //   但 email_sent_at 非空即证明发送流程走通；真实发送由 mail 驱动完成）
+        $delivery = $order->delivered_data;
+        $this->assertSame('email', $delivery['type']);
+        $this->assertSame('guest@buyer.com', $delivery['to']);
+        $this->assertNotNull($order->email_sent_at, '邮件发送时间应记录');
+    }
+
+    public function test_email_delivery_idempotent_no_duplicate_mail(): void
+    {
+        $user = User::factory()->create(['email' => 'owner@mail.com']);
+        $product = $this->product();
+        $product->update([
+            'delivery_type' => 'email',
+            'delivery_payload' => '激活码: ABC-123',
+        ]);
+
+        $order = ShopOrder::create([
+            'order_no' => 'SHOP-TESTEMAIL01',
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'amount' => $product->price,
+            'currency' => 'USD',
+            'quantity' => 1,
+            'channel' => 'mock',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $service = app(ShopService::class);
+        $service->deliver($order);
+        $sentAt = $order->fresh()->email_sent_at;
+        $this->assertNotNull($sentAt, '首次交付应发送邮件');
+
+        // 第二次调用应幂等：email_sent_at 不变、delivered_data 不重复写入
+        $service->deliver($order->fresh());
+        $fresh = $order->fresh();
+        $this->assertSame($sentAt->toDateTimeString(), $fresh->email_sent_at?->toDateTimeString(), '不应重复发送');
+        $this->assertSame('email', $fresh->delivered_data['type']);
+    }
 }

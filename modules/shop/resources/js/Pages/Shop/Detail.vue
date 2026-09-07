@@ -50,11 +50,20 @@ const selectedMethod = ref<string | null>(null);
 selectedMethod.value = methodOptions.value[0]?.key ?? null;
 
 const submitting = ref(false);
+const guestEmail = ref('');
 
 function confirmPay() {
     if (submitting.value || !selectedMethod.value) return;
+    // 游客购买须填写邮箱（邮件交付 / 收据）
+    if (!user.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.value)) {
+        return;
+    }
     submitting.value = true;
-    router.post('/shop/buy', { slug: props.product.slug, method: selectedMethod.value }, {
+    router.post('/shop/buy', {
+        slug: props.product.slug,
+        method: selectedMethod.value,
+        guest_email: user.value ? undefined : guestEmail.value,
+    }, {
         onFinish: () => { submitting.value = false; },
     });
 }
@@ -117,6 +126,18 @@ function confirmPay() {
 
                 <!-- 购买区 -->
                 <div class="mt-8 rounded-2xl border bg-card p-5 sm:p-6">
+                    <!-- 游客购买：收集邮箱（邮件交付 / 收据） -->
+                    <div v-if="!user" class="mb-5">
+                        <p class="mb-2 text-sm font-medium text-foreground">收件邮箱</p>
+                        <input v-model="guestEmail" type="email" placeholder="you@example.com"
+                               class="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                        <p v-if="guestEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)"
+                           class="mt-1.5 text-xs text-red-600">请输入有效的邮箱地址</p>
+                        <p class="mt-1.5 text-xs text-muted-foreground">
+                            游客购买需填写邮箱；支付成功后商品内容（账号 / 激活码 / 邀请码等）将发送到此邮箱
+                        </p>
+                    </div>
+
                     <div v-if="methodOptions.length" class="mb-5">
                         <p class="mb-3 text-sm font-medium text-foreground">选择支付方式</p>
                         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -134,20 +155,21 @@ function confirmPay() {
                     </div>
 
                     <div class="flex gap-3">
-                        <Button size="lg" class="flex-1" :disabled="!purchasable || submitting" @click="confirmPay">
+                        <Button size="lg" class="flex-1" :disabled="!purchasable || submitting || (!user && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail))"
+                                @click="confirmPay">
                             <span v-if="submitting">正在创建订单…</span>
                             <template v-else>
                                 <span class="mr-1.5">{{ purchasable ? '立即购买' : '已售罄' }}</span>
                             </template>
                         </Button>
-                        <Button variant="outline" size="lg" as="a" href="/shop/orders">我的订单</Button>
+                        <Button v-if="user" variant="outline" size="lg" as="a" href="/shop/orders">我的订单</Button>
                     </div>
 
                     <p v-if="!user" class="mt-3 text-center text-xs text-muted-foreground">
-                        购买需要先登录 · <a href="/login" class="font-medium text-primary hover:underline">去登录</a>
+                        游客购买无需注册；商品交付将通过上方邮箱发送
                     </p>
                     <p v-else class="mt-3 text-center text-xs text-muted-foreground">
-                        支付成功后商品将自动交付到「我的订单」
+                        支付成功后商品将自动交付到「我的订单」及注册邮箱
                     </p>
                 </div>
             </div>

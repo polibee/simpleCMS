@@ -96,11 +96,15 @@ class ShopController extends Controller
     public function buy(Request $request): RedirectResponse|\Symfony\Component\HttpFoundation\Response
     {
         $this->abortIfShopDisabled();
+        $user = $request->user();
+
         $data = $request->validate([
             'slug' => ['required', 'string', 'max:220'],
             // 支付方式：CNY 通道（码支付/虎皮椒）用 alipay/wxpay/qqpay；
             // PayPal/crypto 通道由 PaymentGateway 自行路由，无需校验到具体值
             'method' => ['nullable', 'string', 'max:20'],
+            // 游客购买必填邮箱（用于邮件交付 / 收据）；登录用户忽略
+            'guest_email' => [$user ? 'nullable' : 'required', 'email', 'max:191'],
         ]);
 
         $product = ShopProduct::query()
@@ -109,7 +113,12 @@ class ShopController extends Controller
             ->firstOrFail();
 
         try {
-            [$order, $payUrl, $kind] = app(ShopService::class)->checkout($request->user(), $product, $data['method'] ?? null);
+            [$order, $payUrl, $kind] = app(ShopService::class)->checkout(
+                $user,
+                $product,
+                $data['method'] ?? null,
+                $user ? null : $data['guest_email'],
+            );
 
             // 二维码通道（码支付/虎皮椒扫码）→ 通用二维码页
             if ($kind === 'qrcode') {
@@ -158,9 +167,14 @@ class ShopController extends Controller
     {
         $order = ShopOrder::query()->where('order_no', $orderNo)->firstOrFail();
 
-        // 安全：POST 确认需要登录且是订单所有者
+        // 安全：POST 确认需要是订单所有者（登录用户按 user_id，游客按 guest_email 会话匹配）
         if ($request->isMethod('post')) {
-            abort_unless($request->user() && (int) $order->user_id === (int) $request->user()->getAuthIdentifier(), 403);
+            $isOwner = $request->user()
+                ? (int) $order->user_id === (int) $request->user()->getAuthIdentifier()
+                : $order->guest_email !== null
+                    && $order->guest_email === strtolower(trim((string) $request->input('guest_email', '')));
+
+            abort_unless($isOwner, 403);
 
             if ($order->status === 'pending') {
                 app(ShopService::class)->markPaid($order);

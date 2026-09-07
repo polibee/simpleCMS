@@ -35,7 +35,7 @@ final class ShopService
      *
      * @throws \RuntimeException
      */
-    public function checkout(Authenticatable $user, ShopProduct $product, ?string $method = null): array
+    public function checkout(?Authenticatable $user, ShopProduct $product, ?string $method = null, ?string $guestEmail = null): array
     {
         // 先把超时的待付订单库存放回去，避免长期占用（无需额外的调度器也自愈）
         $this->releaseExpired($product);
@@ -84,7 +84,9 @@ final class ShopService
 
             $order = ShopOrder::create([
                 'order_no' => $orderNo,
-                'user_id' => $user->getAuthIdentifier(),
+                // 游客下单 user_id 为空，邮箱存 guest_email（邮件交付用）
+                'user_id' => $user?->getAuthIdentifier(),
+                'guest_email' => $user ? null : $guestEmail,
                 'product_id' => $product->id,
                 'amount' => $product->price,
                 'currency' => $product->currency,
@@ -176,6 +178,7 @@ final class ShopService
      * - download → payload 即下载链接
      * - content  → payload 即文本内容
      * - invite_code → 自动生成一枚邀请码并归属购买者
+     * - email → 通过后台邮箱服务把 payload（账号/激活码/邀请码等）发给买家
      */
     public function deliver(ShopOrder $order): void
     {
@@ -185,6 +188,12 @@ final class ShopService
 
         $product = $order->product;
         if (! $product || $product->delivery_type === 'none') {
+            return;
+        }
+
+        if ($product->delivery_type === 'email') {
+            $this->deliverByEmail($order, $product);
+
             return;
         }
 
@@ -198,6 +207,78 @@ final class ShopService
         if ($data !== null) {
             $order->forceFill(['delivered_data' => $data])->save();
         }
+    }
+
+    /**
+     * 邮件交付：把商品 payload（账号 / 激活码 / 邀请码 / 下载说明等）发给买家邮箱。
+     * 买家为登录用户（购买路由要求 auth），邮箱取 user.email。
+     *
+     * 幂等：email_sent_at 非空即已发送，重复回调不再重发；发送失败在订单上
+     * 记录错误，后续回调 / 手动重发可补。
+     */
+    private function deliverByEmail(ShopOrder $order, ShopProduct $product): void
+    {
+        if ($order->email_sent_at !== null) {
+            return;
+        }
+
+        // 邮件交付目标：游客订单用 guest_email，登录用户用账号邮箱
+        $email = $order->guest_email ?? $order->user?->email;
+
+        if (! $email) {
+            $order->forceFill(['delivered_data' => ['type' => 'email', 'error' => '买家无邮箱，无法邮件交付']])->save();
+
+            return;
+        }
+
+        $payload = trim((string) $product->delivery_payload);
+        if ($payload === '') {
+            $order->forceFill(['delivered_data' => ['type' => 'email', 'error' => '商品未配置邮件交付内容']])->save();
+
+            return;
+        }
+
+        try {
+            \Illuminate\Support\Facades\Mail::raw(
+                $this->emailDeliveryBody($order, $product, $payload),
+                function ($message) use ($email, $product): void {
+                    $message->to($email)->subject('【'.config('app.name', 'simpleCMS').'】您购买的商品：'.$product->name);
+                },
+            );
+
+            $order->forceFill([
+                'delivered_data' => ['type' => 'email', 'to' => $email, 'sent_at' => now()->toDateTimeString()],
+                'email_sent_at' => now(),
+            ])->save();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('商城邮件交付失败', [
+                'order_no' => $order->order_no,
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            $order->forceFill(['delivered_data' => ['type' => 'email', 'error' => '邮件发送失败，请联系客服']])->save();
+        }
+    }
+
+    private function emailDeliveryBody(ShopOrder $order, ShopProduct $product, string $payload): string
+    {
+        $lines = [
+            '您好，',
+            '',
+            '感谢购买「'.$product->name.'」。以下是您的商品内容：',
+            '',
+            '————————————————————————',
+            $payload,
+            '————————————————————————',
+            '',
+            '订单号：'.$order->order_no,
+            '购买时间：'.$order->paid_at?->toDateTimeString(),
+            '',
+            '请妥善保管以上内容，勿向他人泄露。',
+        ];
+
+        return implode("\n", $lines);
     }
 
     /** 邀请码交付：调用 InviteService 生成一枚邀请码归属购买者。 */

@@ -44,5 +44,22 @@
         <div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             恢复将覆盖当前数据库的全部数据且不可撤销，操作前请确认备份文件正确。
         </div>
+
+        <div class="rounded-xl border border-red-300 bg-red-50 p-6 shadow-sm dark:border-red-500/30 dark:bg-red-500/10">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-semibold text-red-800 dark:text-red-300">一键清除测试数据</h2>
+                    <p class="mt-1 text-sm text-red-600/80 dark:text-red-400/80">
+                        清空开发/演示产生的业务数据（文章、评论、商品、订单、邀请码、广告、钱包、签到、单页、轮播图等），
+                        <strong>保留</strong>：管理员账号、角色权限、站点设置、分类、媒体库、插件状态。
+                    </p>
+                </div>
+                <button type="button" wire:click="clearTestData"
+                        wire:confirm="确定清空全部业务数据？账号、设置、分类、媒体会保留，此操作不可撤销！建议先点击上方「立即备份」。"
+                        class="inline-flex h-9 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-red-700">
+                    清除测试数据
+                </button>
+            </div>
+        </div>
     </div>
 </x-filament-panels::page>

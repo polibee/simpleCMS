@@ -30,7 +30,7 @@
 ## ✨ 功能亮点
 
 - **插件化架构**：9 个业务模块可独立安装 / 启用 / 停用 / 卸载（`modules/`）
-- **统一支付网关**：码支付 / 虎皮椒 / PayPal / Xcash（加密）/ Mock 多通道并存，用户前台自选
+- **统一支付网关**：码支付 / 虎皮椒 / PayPal / [Xcash](https://dash.xca.sh/register?ref=2GWV5MKT)（加密）/ [NOWPayments](https://account.nowpayments.io/create-account?link_id=3940543227) / Mock 多通道并存，用户前台自选
 - **付费阅读**：正文插入 `[coinpay_buy price="4.99"]` 即分段付费；后台「内容 → 付费文章」统一定价
 - **内容社区**：文章 / 分类 / 评论 / 单页 / 轮播图 / 搜索 / RSS / Sitemap / 定时发布
 - **创作中心**：前台写作、富文本编辑、个人设置、作者中心
@@ -48,7 +48,7 @@
 | 前台 | Vue 3.5 · Inertia 3.7 · Vite 8 · Tailwind CSS 4 · TypeScript |
 | 基础设施 | Horizon 5.48 · Octane 2.19 · Redis（可选）· CoinPayments SDK |
 
-> 🚀 **由 Vast.ai 提供算力支持**（非官方支持，作者个人使用）：本项目开发、构建与线上演示跑在 [Vast.ai](https://cloud.vast.ai/?ref_id=91181) 的 GPU 云服务器上。Vast.ai 是全球最大的去中心化 GPU 市场，按小时租用 RTX 4090 / A100 等显卡实例，适合模型推理、CI 构建、云托管等场景。如果你也需要弹性算力，可以通过 [这个推荐链接](https://cloud.vast.ai/?ref_id=91181) 注册。
+> 💡 **Vast.ai**（非官方支持，作者个人使用）：作者本人使用 [Vast.ai](https://cloud.vast.ai/?ref_id=91181) 服务。Vast.ai 是全球最大的去中心化 GPU 市场，按小时租用 RTX 4090 / A100 等显卡实例，适合模型推理、CI 构建、云托管等场景。如果你也需要弹性算力，可以通过 [这个推荐链接](https://cloud.vast.ai/?ref_id=91181) 注册。
 
 ## 🌱 基础环境
 
@@ -100,7 +100,7 @@ composer dev
 | `cms` | 固定链接、分类页、搜索、RSS、Sitemap、单页、轮播图、评论、创作中心 | `user` |
 | `economy` | 多币种钱包（金/银/铜）、幂等流水账 | `user` |
 | `quest` | 每日签到、发布奖励 | `user`、`economy` |
-| `crypto-pay` | 付费阅读 + 统一支付网关（码支付/虎皮椒/PayPal/Xcash/Mock） | — |
+| `crypto-pay` | 付费阅读 + 统一支付网关（码支付/虎皮椒/PayPal/[Xcash](https://dash.xca.sh/register?ref=2GWV5MKT)/[NOWPayments](https://account.nowpayments.io/create-account?link_id=3940543227)/Mock） | — |
 | `shop` | 商品、库存、订单、多种发货方式 | — |
 | `invite` | 邀请码生成 / 金币或加密购买 / 注册核销 | — |
 | `ads` | 11 个投放位置的广告管理 | — |
@@ -144,6 +144,7 @@ docs/       项目文档、部署手册、设计稿、支付 SDK、安全审计�
 ## 📚 文档
 
 - **[《生产部署手册》](docs/DEPLOYMENT.md)**（中文） — 环境要求、Nginx/HTTPS、队列调度、Redis/Octane、安全加固、升级备份、常见故障
+- **[《宝塔面板部署教程》](docs/BAOTAO-DEPLOY.md)**（中文） — 宝塔面板图形化部署步骤（Nginx/MySQL/PHP/Redis）
 - **[Deployment Guide](docs/DEPLOYMENT.en.md)**（English）
 - **[《项目文档》](docs/项目文档.md)** — 架构、模块详解、数据模型、路由清单、权限、支付、性能与缓存、运维、二次开发
 - [《安全与代码审计报告》](docs/安全与代码审计报告.md) — 白盒审计结论与修复状态

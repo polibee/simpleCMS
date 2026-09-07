@@ -89,6 +89,14 @@ const channelText = (c: string) => ({ mock: 'Mock', xcash: 'Xcash', paypal: 'Pay
                                 {{ o.delivery.content }}
                             </p>
 
+                            <!-- 邮件交付 -->
+                            <p v-else-if="o.delivery.type === 'email' && !o.delivery.error"
+                               class="mt-1.5 text-sm text-emerald-700 dark:text-emerald-300">
+                                ✉ 商品内容已发送至
+                                <span class="font-medium">{{ o.delivery.to }}</span>
+                                <span v-if="o.delivery.sent_at" class="text-xs text-emerald-600/80">（{{ o.delivery.sent_at }}）</span>
+                            </p>
+
                             <p v-else-if="o.delivery.error"
                                class="mt-1 text-xs text-red-600">{{ o.delivery.error }}</p>
                         </div>

@@ -10,6 +10,7 @@ class ShopOrder extends Model
     protected $fillable = [
         'order_no',
         'user_id',
+        'guest_email',
         'product_id',
         'amount',
         'currency',
@@ -20,12 +21,14 @@ class ShopOrder extends Model
         'status',
         'paid_at',
         'delivered_data',
+        'email_sent_at',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'quantity' => 'integer',
         'paid_at' => 'datetime',
+        'email_sent_at' => 'datetime',
         'delivered_data' => 'array',
     ];
 

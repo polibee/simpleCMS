@@ -91,6 +91,7 @@ class ShopProductForm
                                 'download' => '下载链接（买家获得下载地址）',
                                 'content' => '文本内容（买家获得隐藏文本，如激活码）',
                                 'invite_code' => '邀请码（自动生成并归属买家）',
+                                'email' => '邮件交付（支付后把内容发到买家邮箱）',
                             ])
                             ->default('none')
                             ->live()
@@ -106,8 +107,10 @@ class ShopProductForm
                             ->rows(4)
                             ->maxLength(3000)
                             ->columnSpanFull()
-                            ->visible(fn ($get) => $get('delivery_type') === 'content')
-                            ->helperText('支付成功后展示给买家的文本，如激活码、配置信息等'),
+                            ->visible(fn ($get) => in_array($get('delivery_type'), ['content', 'email'], true))
+                            ->helperText(fn ($get) => $get('delivery_type') === 'email'
+                                ? '支付回调成功后，此内容将通过后台邮箱服务发送到买家注册邮箱（支持账号、激活码、邀请码等多行内容）'
+                                : '支付成功后展示给买家的文本，如激活码、配置信息等'),
                     ])
                     ->columnSpanFull(),
             ]);

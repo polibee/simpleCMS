@@ -153,6 +153,87 @@ class BackupManagerPage extends Page
     }
 
     // ------------------------------------------------------------------
+    // 一键清除测试数据
+    // ------------------------------------------------------------------
+
+    /**
+     * 清空开发/测试产生的业务数据（文章、评论、商品、订单、邀请码、广告、
+     * 钱包流水、签到、站点页面等），保留：管理员账号、角色权限、站点设置、
+     * 分类结构、媒体库、插件状态。
+     *
+     * 适用于开发环境想“回到干净状态”重新演示，或上线前清空演示数据。
+     *
+     * @return array{code: string, message: string}
+     */
+    public function clearTestData(): array
+    {
+        $tables = [
+            // 业务数据（按外键依赖从子到父）
+            'comments',
+            'post_tag',
+            'tags',
+            'cms_post_meta',
+            'category_post',
+            'posts',
+            'site_pages',
+            'cms_banners',
+            'crypto_orders',
+            'crypto_post_prices',
+            'shop_orders',
+            'shop_products',
+            'invite_orders',
+            'invite_codes',
+            'ads',
+            'quest_checkins',
+            'quests',
+            'wallet_ledger',
+            'wallets',
+            'performance_stats',
+        ];
+
+        // 保留：users、roles、permissions、model_has_roles、settings、
+        //       categories、media、menus、menu_locations、mks_plugins、migrations 等
+
+        $cleared = 0;
+        $skipped = [];
+
+        // 关闭外键检查：truncate 需要，避免子表引用父表时失败
+        \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+        foreach ($tables as $table) {
+            try {
+                if (! \Illuminate\Support\Facades\Schema::hasTable($table)) {
+                    continue;
+                }
+                \Illuminate\Support\Facades\DB::table($table)->truncate();
+                $cleared++;
+            } catch (\Throwable $e) {
+                $skipped[] = $table;
+                \Illuminate\Support\Facades\Log::warning('清除测试数据失败', [
+                    'table' => $table,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+        \Illuminate\Support\Facades\Log::warning('管理员执行了清除测试数据', [
+            'user_id' => auth()->id(),
+            'cleared' => $cleared,
+            'skipped' => $skipped,
+        ]);
+
+        $message = '已清空 '.$cleared.' 张业务表（账号、设置、分类、媒体保留）';
+        if ($skipped !== []) {
+            $message .= '；跳过：'.implode(', ', $skipped);
+        }
+        $this->notify($message, 'success');
+
+        return ['code' => 'ok', 'message' => $message];
+    }
+
+    // ------------------------------------------------------------------
     // 恢复（导入）
     // ------------------------------------------------------------------
 

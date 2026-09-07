@@ -51,6 +51,7 @@ class ShopProduct extends Model
             'download' => '下载链接',
             'content' => '文本内容',
             'invite_code' => '邀请码',
+            'email' => '邮件交付',
         ][$this->delivery_type] ?? $this->delivery_type;
     }
 }
