@@ -7,11 +7,11 @@
 require_once 'api.php';
 $param=$_GET;
 if($param['type']=='wechat'){
-	$appid              = '201906130470';
-	$appsecret          = 'd6031f0c7debcc61d486cad77468ae46';
+	$appid              = 'YOUR_APPID';
+	$appsecret          = 'YOUR_APPSECRET';
 }else{
-	$appid              = '201906130470';
-	$appsecret          = 'd6031f0c7debcc61d486cad77468ae46';
+	$appid              = 'YOUR_APPID';
+	$appsecret          = 'YOUR_APPSECRET';
 }
 //out_trade_order，open_order_id 二选一
 $request=array(

@@ -6,12 +6,12 @@ $param=$_POST;
 if($param){
     $title = '微信';
 	if($param['type']=='wechat'){
-		$appid              = '201906130470';
-		$appsecret          = 'd6031f0c7debcc61d486cad77468ae46';
+		$appid              = 'YOUR_APPID';
+		$appsecret          = 'YOUR_APPSECRET';
 		$title = '微信';
 	}else{
-		$appid              = '201906130470';
-		$appsecret          = 'd6031f0c7debcc61d486cad77468ae46';
+		$appid              = 'YOUR_APPID';
+		$appsecret          = 'YOUR_APPSECRET';
 		$title = '支付宝';
 	}
 	$data=array(
