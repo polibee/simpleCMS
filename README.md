@@ -62,6 +62,23 @@
 
 > Windows 本地开发推荐 [Laragon](https://laragon.org)（自带 PHP + MySQL，一条命令启动）。
 
+## 🚀 快速部署（服务器 / 宝塔面板）
+
+一般用户部署只需三步：
+
+```bash
+# 1. 把 simpleCMS 源码放到 Web 目录（如 /www/wwwroot/your-domain）
+# 2. 在该目录执行一键部署脚本（自动完成全部安装）
+bash deploy.sh
+
+# 3. 按提示填写数据库 / 域名 / 管理员信息，等待完成
+```
+
+脚本自动完成：`composer install` → 生成 `.env` → `key:generate` → 数据库迁移（内核 + 全部插件）→ 创建管理员 → 前端构建 → 目录权限。
+
+> 环境要求：PHP 8.3+、Composer 2.x、Node.js 20+（宝塔面板在「软件商店」安装对应版本即可）。
+> 详细图文步骤见 [《宝塔面板部署教程》](docs/BAOTAO-DEPLOY.md)；手动部署见 [《生产部署手册》](docs/DEPLOYMENT.md)。
+
 ## 🚀 快速开始（开发环境）
 
 ```bash

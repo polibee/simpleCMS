@@ -62,6 +62,23 @@ The underlying CMS foundation is provided by the [`miran/mksine`](https://github
 
 > On Windows, [Laragon](https://laragon.org) is the recommended local environment (bundles PHP + MySQL, one-click startup).
 
+## 🚀 Quick Deploy (server / BT Panel)
+
+Deploying for normal users takes just three steps:
+
+```bash
+# 1. Put the simpleCMS source into your web directory (e.g. /www/wwwroot/your-domain)
+# 2. Run the one-click deploy script from that directory (it handles the whole install)
+bash deploy.sh
+
+# 3. Follow the prompts to enter the database / domain / admin credentials, then wait
+```
+
+The script automates: `composer install` → generate `.env` → `key:generate` → database migrations (core + all plugins) → create the admin account → front-end build → directory permissions.
+
+> Requirements: PHP 8.3+, Composer 2.x, Node.js 20+ (install matching versions via the BT Panel app store).
+> Step-by-step guide: [BT Panel Deployment](docs/BAOTAO-DEPLOY.md) (Chinese); manual deployment: [Deployment Guide](docs/DEPLOYMENT.en.md).
+
 ## 🚀 Quick Start (development)
 
 ```bash
