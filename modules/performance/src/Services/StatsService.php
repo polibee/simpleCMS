@@ -41,19 +41,9 @@ final class StatsService
     /** 最近 N 天统计（缺失日期补零）。 */
     public static function last(int $days = 14): array
     {
-        try {
-            $rows = DB::table('performance_stats')
-                ->where('date', '>=', Carbon::today()->subDays($days - 1)->toDateString())
-                ->pluck('hits', 'date')
-                ->merge(DB::table('performance_stats')
-                    ->where('date', '>=', Carbon::today()->subDays($days - 1)->toDateString())
-                    ->pluck('misses', 'date'))
-                ->all();
-        } catch (\Throwable) {
-            $rows = [];
-        }
-
-        // hits/misses merge 同键会覆盖 —— 重新查询成对数据
+        // 一次性取整行。不要写成两次 pluck('hits'|'misses','date') 再 merge：
+        // 同键会被后者覆盖，hits 会被 misses 吃掉（历史上确实这样写过，
+        // 随后又补了一次查询绕过，留下的死代码已在此移除）。
         try {
             $pair = DB::table('performance_stats')
                 ->where('date', '>=', Carbon::today()->subDays($days - 1)->toDateString())

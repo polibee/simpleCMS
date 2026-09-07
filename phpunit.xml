@@ -11,10 +11,15 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!-- 模块测试：此前未纳入任何套件，php artisan test 从不执行它们 -->
+        <testsuite name="Modules">
+            <directory>modules/*/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
             <directory>app</directory>
+            <directory>modules</directory>
         </include>
     </source>
     <php>

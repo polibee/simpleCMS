@@ -43,7 +43,7 @@ class ShopController extends Controller
             'currency' => $p->currency,
             'stock' => $p->stock,
             'sold' => $p->sold,
-            'image_url' => $p->image_url,
+            'image_url' => $p->image_url ?: static::defaultProductImage(),
             'category' => $p->category,
             'url' => '/shop/'.$p->slug,
         ])->all();
@@ -72,12 +72,14 @@ class ShopController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'slug' => $product->slug,
-                'description' => $product->description,
+                // 后台用 RichEditor 录入（存 HTML），前台 v-html 输出前必须过白名单清洗，
+                // 否则一旦后台账号被入侵或权限配置过宽即为存储型 XSS（P2-5）
+                'description' => \App\Support\HtmlSanitizer::clean($product->description),
                 'price' => $product->price,
                 'currency' => $product->currency,
                 'stock' => $product->stock,
                 'sold' => $product->sold,
-                'image_url' => $product->image_url,
+                'image_url' => $product->image_url ?: static::defaultProductImage(),
             ],
             'mockMode' => ShopService::mockMode(),
             // 用户可选支付方式（当前通道支持的方法列表）
@@ -85,12 +87,20 @@ class ShopController extends Controller
         ]);
     }
 
-    public function buy(Request $request): RedirectResponse
+    /** 商品未设置图片时的默认占位图（前后端统一用这张）。 */
+    public static function defaultProductImage(): string
+    {
+        return url('/images/product-placeholder.svg');
+    }
+
+    public function buy(Request $request): RedirectResponse|\Symfony\Component\HttpFoundation\Response
     {
         $this->abortIfShopDisabled();
         $data = $request->validate([
             'slug' => ['required', 'string', 'max:220'],
-            'method' => ['nullable', 'string', 'in:alipay,wxpay,qqpay'],
+            // 支付方式：CNY 通道（码支付/虎皮椒）用 alipay/wxpay/qqpay；
+            // PayPal/crypto 通道由 PaymentGateway 自行路由，无需校验到具体值
+            'method' => ['nullable', 'string', 'max:20'],
         ]);
 
         $product = ShopProduct::query()
@@ -103,9 +113,13 @@ class ShopController extends Controller
 
             // 二维码通道（码支付/虎皮椒扫码）→ 通用二维码页
             if ($kind === 'qrcode') {
-                return redirect()->to(
-                    \Modules\CryptoPay\Services\PaymentGateway::qrPageUrl($payUrl, '/shop/orders'),
-                );
+                $payUrl = \Modules\CryptoPay\Services\PaymentGateway::qrPageUrl($payUrl, '/shop/orders');
+            }
+
+            // Inertia XHR 请求必须用整页跳转：外部收银台（pay.xca.sh / PayPal）若直接
+            // 返回 302，浏览器 XHR 跨域跟随会被 CORS 拦截，表现为「点了去支付没反应」
+            if ($request->header('X-Inertia')) {
+                return inertia()->location($payUrl);
             }
 
             return redirect()->to($payUrl);
@@ -191,42 +205,75 @@ class ShopController extends Controller
         return redirect()->to('/shop/orders')->with('error', 'PayPal 订单未完成支付。');
     }
 
-    /** 码支付/虎皮椒异步通知（GET/POST 通用）：验签 → 标记支付 → 输出平台要求的应答。 */
+    /**
+     * 码支付/虎皮椒异步通知（GET/POST 通用）：验签 → 校验金额 → 标记支付 → 输出平台要求的应答。
+     *
+     * 通道按**订单自身**的 channel 字段判定，而不是全局设置 crypto_pay_channel：
+     * 后者在管理员切换支付通道后会让在途订单的回调全部失配，静默丢单（P1-2）。
+     */
     public function notify(Request $request): Response
     {
         $service = app(ShopService::class);
         $params = $request->isMethod('get') ? $request->query->all() : $request->post();
-        $channel = (string) \App\Support\SiteSettings::get('crypto_pay_channel', '');
 
-        // 码支付：MD5 验签 + TRADE_SUCCESS
-        if ($channel === 'codepay') {
-            if (\Modules\CryptoPay\Services\CodePayClient::verifyNotify($params)) {
-                $order = ShopOrder::query()->where('order_no', (string) ($params['out_trade_no'] ?? ''))->first();
-                if ($order) {
-                    $service->markPaid($order);
-                }
+        $orderNo = (string) ($params['out_trade_no'] ?? $params['trade_order_id'] ?? '');
+        $order = $orderNo === '' ? null : ShopOrder::query()->where('order_no', $orderNo)->first();
 
-                return response('success');
-            }
+        if (! $order) {
+            return response('fail', 200);
+        }
+
+        // 已支付：直接应答成功（幂等，避免渠道重复通知造成重复处理）
+        if ($order->status === 'paid') {
+            return response('success');
+        }
+
+        $verified = match ($order->channel) {
+            'codepay' => \Modules\CryptoPay\Services\CodePayClient::verifyNotify($params),
+            'xunhupay' => \Modules\CryptoPay\Services\XunHuPayClient::verifyNotify(
+                $params,
+                \Modules\CryptoPay\Services\XunHuPayClient::notifyAppSecret(),
+            ),
+            default => false,
+        };
+
+        if (! $verified) {
+            return response('fail', 200);
+        }
+
+        // 金额校验：以订单金额为准，避免金额被篡改的回调直接放行进账
+        if (! $this->amountMatches($order, $params)) {
+            \Illuminate\Support\Facades\Log::warning('商城回调金额与订单不符，已拒绝', [
+                'order_no' => $order->order_no,
+                'order_amount' => $order->amount,
+                'params' => array_intersect_key($params, array_flip(['money', 'total_fee', 'amount', 'out_trade_no', 'trade_order_id'])),
+            ]);
 
             return response('fail', 200);
         }
 
-        // 虎皮椒：MD5 验签 + status=OD
-        if ($channel === 'xunhupay') {
-            if (\Modules\CryptoPay\Services\XunHuPayClient::verifyNotify($params, \Modules\CryptoPay\Services\XunHuPayClient::notifyAppSecret())) {
-                $order = ShopOrder::query()->where('order_no', (string) ($params['trade_order_id'] ?? ''))->first();
-                if ($order) {
-                    $service->markPaid($order);
-                }
+        $service->markPaid($order);
 
-                return response('success');
-            }
+        return response('success');
+    }
 
-            return response('fail', 200);
+    /**
+     * 回调金额与订单金额是否一致（容忍 0.01 的浮点/分位误差）。
+     *
+     * 取不到金额字段时视为通过——部分渠道的同步回跳不带金额，
+     * 真正的入账以异步通知为准。
+     *
+     * @param  array<string, mixed>  $params
+     */
+    private function amountMatches(ShopOrder $order, array $params): bool
+    {
+        $paid = $params['money'] ?? $params['total_fee'] ?? $params['amount'] ?? null;
+
+        if ($paid === null || $paid === '') {
+            return true;
         }
 
-        return response('unsupported channel', 200);
+        return abs((float) $paid - (float) $order->amount) <= 0.01;
     }
 
     /** 码支付/虎皮椒页面跳转通知（同步回跳，验证后直接转订单页）。 */

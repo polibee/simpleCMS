@@ -29,6 +29,20 @@ class PerformancePageCache
         'admin', 'login', 'logout', 'register', 'studio', 'invite', 'horizon',
         'email', 'comment/captcha', 'crypto-pay', 'livewire', 'octane',
         'sitemap.xml', 'up', 'user', 'quest', 'api', 'privacy',
+        // 带任意 query 即可生成新缓存键，参与缓存会被刷爆存储（P2-3）
+        'search', 'feed',
+    ];
+
+    /**
+     * 允许随响应体一起缓存的响应头（白名单）。
+     *
+     * 绝不能缓存的头：set-cookie（会把首个游客的 session / XSRF-TOKEN 重放给
+     * 所有后续访客，造成会话串号与 419）、cache-control、date、age、etag 之外的
+     * 逐响应头，以及任何限速头。
+     */
+    private const CACHEABLE_HEADERS = [
+        'content-type', 'content-language', 'content-encoding',
+        'etag', 'last-modified', 'vary',
     ];
 
     public function handle(Request $request, Closure $next): Response
@@ -43,7 +57,10 @@ class PerformancePageCache
             if (is_array($cached)) {
                 StatsService::record(true, 0);
 
-                return new Response($cached['body'], $cached['status'], $cached['headers']);
+                $response = new Response($cached['body'], $cached['status'], $cached['headers']);
+                $response->headers->set('X-Page-Cache', 'HIT');
+
+                return $response;
             }
         }
 
@@ -55,7 +72,7 @@ class PerformancePageCache
             Cache::store($store)->put($key, [
                 'body' => $response->getContent(),
                 'status' => $response->getStatusCode(),
-                'headers' => $response->headers->all(),
+                'headers' => $this->cacheableHeaders($response),
             ], $ttl);
 
             $this->trackIndex($key, $store);
@@ -63,7 +80,28 @@ class PerformancePageCache
             StatsService::record(false, (int) round((microtime(true) - $start) * 1000));
         }
 
+        $response->headers->set('X-Page-Cache', $key !== null ? 'MISS' : 'BYPASS');
+
         return $response;
+    }
+
+    /**
+     * 从响应中挑出可以安全缓存的头（按白名单，避免重放 Set-Cookie）。
+     *
+     * @return array<string, list<string|null>>
+     */
+    private function cacheableHeaders(Response $response): array
+    {
+        $headers = [];
+
+        foreach (self::CACHEABLE_HEADERS as $name) {
+            $values = $response->headers->all($name);
+            if ($values !== []) {
+                $headers[$name] = $values;
+            }
+        }
+
+        return $headers;
     }
 
     /** 是否参与缓存（WP Super Cache 的 should-cache 判定）。 */
@@ -90,6 +128,15 @@ class PerformancePageCache
             return false;
         }
 
+        // 携带 flash / 校验错误的响应是一次性的（如评论后 redirect()->back()->with(...)），
+        // 一旦进缓存会把这条提示固化给后续所有访客（P2-1 缓存投毒）
+        if ($request->hasSession()) {
+            $session = $request->session();
+            if ($session->has('success') || $session->has('error') || $session->has('errors')) {
+                return false;
+            }
+        }
+
         $path = trim($request->path(), '/');
         if ($path === '') {
             return true; // 首页
@@ -106,7 +153,25 @@ class PerformancePageCache
 
     public function key(Request $request): string
     {
-        return 'pcache:'.hash('sha256', 'GET|'.$request->getSchemeAndHttpHost().$request->getRequestUri());
+        // Cookie 授权状态决定统计脚本是否注入（app.blade.php），必须参与缓存键，
+        // 否则首个访客的选择会被固化给所有人，未同意者也被注入统计代码（P2-2）
+        $consent = (string) $request->cookie('cookie_consent', '');
+
+        return 'pcache:'.hash('sha256', 'GET|'.$request->getSchemeAndHttpHost().$request->getRequestUri().'|consent:'.$consent);
+    }
+
+    /**
+     * 静态便捷判定：当前请求是否会被整页缓存接管。
+     *
+     * 供 HandleInertiaRequests 等在渲染期决定是否下发个性化数据。
+     */
+    public static function cacheable(Request $request): bool
+    {
+        try {
+            return (new self)->isCacheable($request);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /** 当前缓存存储（auto = Redis 可达时优先）。 */

@@ -31,8 +31,10 @@ Route::get('/privacy', fn () => app(\Modules\CMS\Http\Controllers\StaticPageCont
 Route::get('/terms', fn () => app(\Modules\CMS\Http\Controllers\StaticPageController::class)->show(request(), 'terms'))->name('cms.terms');
 Route::get('/about', fn () => app(\Modules\CMS\Http\Controllers\StaticPageController::class)->show(request(), 'about'))->name('cms.about');
 
-// 全文搜索 + RSS Feed
-Route::get('/search', [\Modules\CMS\Http\Controllers\CmsExtraController::class, 'search'])->name('cms.search');
+// 全文搜索 + RSS Feed（搜索为 longtext LIKE 全表扫描，单独限流）
+Route::get('/search', [\Modules\CMS\Http\Controllers\CmsExtraController::class, 'search'])
+    ->middleware('throttle:search')
+    ->name('cms.search');
 Route::get('/feed', [\Modules\CMS\Http\Controllers\CmsExtraController::class, 'feed'])->name('cms.feed');
 
 // 站点地图 /sitemap.xml（1 小时缓存；提供首页、文章列表与全部已发布文章，含 lastmod）

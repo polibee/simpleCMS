@@ -63,6 +63,8 @@ class RegisterController extends Controller
         }
 
         // 邀请码校验（invite 模块启用且后台开关开启）
+        // 这里的校验只用于「填错时给出友好提示」；真正的核销在账号创建后交由
+        // consumeForRegistration() 原子完成——校验与核销分离会留下 TOCTOU 窗口
         $inviteRequired = \Modules\Invite\Services\InviteService::registrationRequired();
         if ($inviteRequired) {
             app(\Modules\Invite\Services\InviteService::class)->validateForRegistration($data['invite_code'] ?? null);
@@ -80,9 +82,17 @@ class RegisterController extends Controller
         event(new Registered($user));
         event(new UserRegistered($user, $data['invite_code'] ?? null));
 
-        // 邀请码核销（校验已通过，标记已使用）
+        // 邀请码核销（原子：只有真正把状态从 active 改成 used 才算成功）
         if ($inviteRequired) {
-            app(\Modules\Invite\Services\InviteService::class)->consume($data['invite_code'], (int) $user->getAuthIdentifier());
+            try {
+                app(\Modules\Invite\Services\InviteService::class)
+                    ->consumeForRegistration($data['invite_code'] ?? null, (int) $user->getAuthIdentifier());
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                // 极端并发下码被他人抢先核销：回滚已建账号，返回表单错误
+                $user->delete();
+
+                throw $e;
+            }
         }
 
         // 认领本会话下的游客支付订单（避免丢单）

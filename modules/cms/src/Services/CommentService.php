@@ -57,16 +57,57 @@ final class CommentService
         ]);
     }
 
+    /** 顶层评论默认条数。 */
+    public const TOP_LIMIT = 20;
+
+    /** 单个父评论下最多加载的回复数（防热门文章响应体积无限膨胀）。 */
+    public const REPLY_LIMIT = 50;
+
     /**
-     * 某文章的评论树（顶层按时间正序，子回复全量挂在 replies 下），
+     * 某文章的评论树（顶层按时间正序，子回复挂在 replies 下），
      * 每条评论带 Markdown 渲染后的 html 与 UA 识别信息。
+     *
+     * 回复数量设上限：旧实现把全部回复一次性 attach 且无条数/层级限制，
+     * 热门文章会让单次响应与内存占用线性膨胀（P2-8）。
      */
-    public function treeFor(int $postId, int $topLimit = 20): array
+    public function treeFor(int $postId, int $topLimit = self::TOP_LIMIT): array
     {
-        $comments = Comment::query()
+        // 只取本页需要的评论：先定位顶层 ID，再连带其回复，避免整表捞回
+        $topIds = Comment::query()
             ->where('commentable_type', \Miran\Mksine\Models\Post::class)
             ->where('commentable_id', $postId)
             ->where('status', 'approved')
+            ->whereNull('parent_id')
+            ->orderBy('created_at')
+            ->limit($topLimit)
+            ->pluck('id');
+
+        if ($topIds->isEmpty()) {
+            return [];
+        }
+
+        $countByParent = Comment::query()
+            ->selectRaw('parent_id, COUNT(*) as aggregate')
+            ->whereIn('parent_id', $topIds)
+            ->where('status', 'approved')
+            ->groupBy('parent_id')
+            ->pluck('aggregate', 'parent_id');
+
+        // 先只取回复 ID（轻量），按父分组后每组截断到 REPLY_LIMIT，
+        // 再回查保留行的完整数据 —— 这样响应体积与加载的模型数都是有限的
+        $replyIdsByParent = Comment::query()
+            ->select(['id', 'parent_id'])
+            ->whereIn('parent_id', $topIds)
+            ->where('status', 'approved')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('parent_id')
+            ->map(fn ($rows) => $rows->pluck('id')->take(self::REPLY_LIMIT)->all());
+
+        $keptReplyIds = $replyIdsByParent->flatten()->all();
+
+        $comments = Comment::query()
+            ->whereIn('id', $topIds->merge($keptReplyIds)->all())
             ->with(['user:id,name'])
             ->orderBy('created_at')
             ->get();
@@ -76,21 +117,26 @@ final class CommentService
             ->whereIn('id', $comments->pluck('user_id')->filter()->unique())
             ->pluck('name', 'id');
 
-        $decorated = $comments->map(fn (Comment $c) => $this->decorate($c, $usersById));
+        $decorated = $comments->map(fn (Comment $c) => $this->decorate($c, $usersById))->keyBy('id');
 
-        $tops = $decorated->whereNull('parent_id')->values();
         $children = $decorated->whereNotNull('parent_id')->groupBy('parent_id');
 
-        return $tops
-            ->slice(0, $topLimit)
-            ->map(function ($comment) use ($children) {
+        return $topIds
+            ->map(fn ($id) => $decorated->get($id))
+            ->filter()
+            ->map(function ($comment) use ($children, $countByParent) {
+                $total = (int) ($countByParent[$comment['id']] ?? 0);
+
                 $comment['replies'] = $this->attachReplies(
                     $children->get($comment['id'], collect()),
                     $comment['author_name'],
                 );
+                $comment['replies_total'] = $total;
+                $comment['hidden_replies'] = max(0, $total - count($comment['replies']));
 
                 return $comment;
             })
+            ->values()
             ->all();
     }
 
@@ -101,7 +147,7 @@ final class CommentService
             $reply['replies'] = [];
 
             return $reply;
-        })->all();
+        })->values()->all();
     }
 
     /**

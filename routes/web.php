@@ -9,9 +9,14 @@ use Illuminate\Support\Facades\Route;
 \Modules\CMS\Support\CmsRoutes::register();
 
 // 前台登录/登出（Laravel 13 默认无 auth 脚手架，这里补齐）
+// 写操作限流（命名限流器，见 RateLimitServiceProvider）：防凭据爆破与会话骚扰
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.store');
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:login')
+    ->name('login.store');
+Route::post('/logout', [AuthController::class, 'logout'])
+    ->middleware('throttle:logout')
+    ->name('logout');
 
 // 首页：Hero + 最新文章流 + 侧边栏
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -43,7 +48,7 @@ Route::post('/email/code', function (\Illuminate\Http\Request $request) {
     }
 
     return response()->json(['message' => '验证码已发送']);
-})->middleware('throttle:10,1')->name('email.code.send');
+})->middleware('throttle:email-code')->name('email.code.send');
 
 // 备份文件下载（super_admin；basename 强校验防路径穿越）
 Route::get('/admin/backups/{name}/download', function (string $name) {

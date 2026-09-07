@@ -147,7 +147,8 @@ final class PaymentGateway
 
     private static function xcash(string $orderNo, string $title, float $amount, string $currency, array $urls): array
     {
-        [$invoiceId, $payUrl] = XcashClient::createInvoice(
+        // XcashClient::createInvoice 是实例方法（用 app() 解析，支持容器替换）
+        [$invoiceId, $payUrl] = app(XcashClient::class)->createInvoice(
             $orderNo,
             mb_substr($title, 0, 100),
             (string) $amount,

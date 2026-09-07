@@ -48,6 +48,52 @@ class SiteSettingsPage extends MksSettingsPage
         return __('站点设置');
     }
 
+    /**
+     * 邀请注册模式下拉由旧的布尔开关推导（旧数据无模式值时兼容显示）。
+     */
+    protected function loadStoredSettingsIntoForm(): void
+    {
+        parent::loadStoredSettingsIntoForm();
+
+        $mode = $this->data['invite_registration_mode'] ?? null;
+        if ($mode === null || $mode === '') {
+            $this->data['invite_registration_mode'] = \App\Support\SiteSettings::bool('invite_registration_enabled')
+                ? 'required'
+                : 'off';
+        }
+    }
+
+    /**
+     * 保存时把模式下拉映射回旧布尔键（InviteService 读取 invite_registration_enabled）。
+     */
+    public function saveData(): void
+    {
+        $this->validate();
+
+        $state = $this->form->getState();
+
+        // 邀请注册：模式（on/off）→ 布尔开关；只持久化布尔键，避免双键不一致
+        if (array_key_exists('invite_registration_mode', $state)) {
+            $state['invite_registration_enabled'] = $state['invite_registration_mode'] === 'required' ? '1' : '0';
+        }
+
+        foreach ($state as $key => $item) {
+            if ($key === 'invite_registration_mode') {
+                continue; // 模式键不在 settings 持久化，由布尔键推导
+            }
+
+            \Miran\Mksine\Models\Setting::updateOrCreate(
+                ['key' => $key],
+                ['value' => is_array($item) ? json_encode($item) : $item],
+            );
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title(__('mksine::settings.save_success'))
+            ->success()
+            ->send();
+    }
+
     protected function settingsSchema(): array
     {
         return [
@@ -68,8 +114,8 @@ class SiteSettingsPage extends MksSettingsPage
                 ])
                 ->columns(1),
 
-            Section::make('注册限制 · 邮箱白名单')
-                ->description('§九十九：只允许主流邮箱注册，防止临时邮箱灌水。开关开 + 白名单生效时，非白名单域名注册被拒；关闭或白名单留空 = 不限制（本地/测试不受影响）。')
+            Section::make('注册限制')
+                ->description('§九十九：注册门槛控制。邮箱白名单只允许主流邮箱防灌水；邀请注册开启后新用户必须持有效邀请码才能注册。')
                 ->schema([
                     Toggle::make('user_reg_whitelist_enabled')
                         ->label('启用邮箱白名单')
@@ -80,6 +126,15 @@ class SiteSettingsPage extends MksSettingsPage
                         ->placeholder('gmail.com, outlook.com, hotmail.com, yahoo.com, icloud.com, qq.com, 163.com, 126.com, foxmail.com')
                         ->columnSpanFull()
                         ->helperText('示例见输入框提示；列表外的域名注册将被拒绝'),
+                    \Filament\Forms\Components\Select::make('invite_registration_mode')
+                        ->label('邀请注册')
+                        ->options([
+                            'off' => '不使用（任意用户可注册）',
+                            'required' => '强制（注册必须提供有效邀请码）',
+                        ])
+                        ->default(fn () => \App\Support\SiteSettings::bool('invite_registration_enabled') ? 'required' : 'off')
+                        ->columnSpanFull()
+                        ->helperText('强制模式下注册页邀请码必填，管理员在"内容→邀请码"生成；需同时启用 invite 模块'),
                 ])
                 ->columns(1),
 
@@ -213,16 +268,12 @@ class SiteSettingsPage extends MksSettingsPage
                 ->columns(1),
 
             Section::make('邀请码')
-                ->description('注册是否必须邀请码，购买方式与定价；管理员在"内容→邀请码"手动生成。')
+                ->description('邀请码购买方式与定价；管理员在"内容→邀请码"手动生成。注册是否必须邀请码请在「注册限制」卡片配置。')
                 ->schema([
                     Toggle::make('invite_center_enabled')
                         ->label('启用邀请码中心页面（/invite）')
                         ->default(true)
                         ->helperText('关闭后前台购买页面返回 404，仅保留后台生成与注册核销'),
-                    Toggle::make('invite_registration_enabled')
-                        ->label('注册必须使用邀请码')
-                        ->default(false)
-                        ->helperText('需同时启用 invite 模块'),
                     Toggle::make('invite_allow_gold')
                         ->label('开放金币购买')
                         ->default(false),

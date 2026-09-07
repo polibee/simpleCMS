@@ -25,6 +25,12 @@ final class Captcha
 {
     public const SESSION_KEY = 'captcha_answer';
 
+    /** 失败次数键（达到上限即强制重新出题，封住穷举面）。 */
+    public const SESSION_FAILS = 'captcha_fails';
+
+    /** 连续失败多少次后作废当前题目。 */
+    public const MAX_FAILS = 5;
+
     private const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
     public static function driver(): string
@@ -66,27 +72,47 @@ final class Captcha
     // math 驱动
     // ------------------------------------------------------------------
 
-    /** 生成数学题存 session，返回题目文本（turnstile 模式返回空串）。 */
+    /**
+     * 生成数学题存 session，返回题目文本（turnstile 模式返回空串）。
+     *
+     * 操作数取 -50..50 的随机整数，四种运算，答案空间远大于旧版 1..9 的
+     * 加减（有效答案仅 19 种，可被脚本穷举 —— 见 P0-2）。
+     */
     public static function generate(): string
     {
         if (self::turnstileEnabled()) {
             return '';
         }
 
-        $a = random_int(1, 9);
-        $b = random_int(1, 9);
+        $op = random_int(0, 3);
 
-        if (random_int(0, 1) === 1) {
-            $question = "{$a} + {$b}";
-            $answer = $a + $b;
+        if ($op === 2) {
+            // 乘法：控制位数，保证可心算
+            $a = random_int(2, 12);
+            $b = random_int(2, 9);
+            $question = "{$a} × {$b}";
+            $answer = $a * $b;
         } else {
-            $max = max($a, $b);
-            $min = min($a, $b);
-            $question = "{$max} - {$min}";
-            $answer = $max - $min;
+            $a = random_int(-50, 50);
+            $b = random_int(-50, 50);
+
+            $question = match ($op) {
+                0 => "{$a} + {$b}",
+                1 => "{$a} - {$b}",
+                default => "{$a} + {$b}",
+            };
+
+            $answer = match ($op) {
+                0 => $a + $b,
+                1 => $a - $b,
+                default => $a + $b,
+            };
         }
 
-        session([self::SESSION_KEY => $answer]);
+        session([
+            self::SESSION_KEY => $answer,
+            self::SESSION_FAILS => 0,
+        ]);
 
         return $question.' = ?';
     }
@@ -177,10 +203,24 @@ final class Captcha
         session()->forget(self::SESSION_KEY);
 
         if ($expected === null || $given === null || (int) $given !== (int) $expected) {
+            // 失败计数：达到上限即清空题目并要求重新获取（旧版可无限次重放同一题）
+            $fails = (int) session(self::SESSION_FAILS, 0) + 1;
+            session([self::SESSION_FAILS => $fails]);
+
+            if ($fails >= self::MAX_FAILS) {
+                session()->forget([self::SESSION_KEY, self::SESSION_FAILS]);
+
+                throw ValidationException::withMessages([
+                    'captcha_answer' => '错误次数过多，请刷新页面重新获取验证码。',
+                ]);
+            }
+
             throw ValidationException::withMessages([
                 'captcha_answer' => '验证码不正确，请重试。',
             ]);
         }
+
+        session()->forget(self::SESSION_FAILS);
     }
 
     private static function verifyTurnstile(Request $request): void

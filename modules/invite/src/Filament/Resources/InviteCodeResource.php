@@ -20,12 +20,7 @@ class InviteCodeResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-ticket';
 
-    protected static \UnitEnum|string|null $navigationGroup = '内容';
-
-    public static function getNavigationGroup(): ?string
-    {
-        return __('invite::invite.group');
-    }
+    protected static \UnitEnum|string|null $navigationGroup = \Miran\Mksine\Filament\Support\AdminNavigationGroup::Content;
 
     protected static ?int $navigationSort = 6;
 

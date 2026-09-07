@@ -21,12 +21,7 @@ class AdResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-megaphone';
 
-    protected static \UnitEnum|string|null $navigationGroup = '内容';
-
-    public static function getNavigationGroup(): ?string
-    {
-        return __('ads::ads.group');
-    }
+    protected static \UnitEnum|string|null $navigationGroup = \Miran\Mksine\Filament\Support\AdminNavigationGroup::Content;
 
     protected static ?int $navigationSort = 5;
 

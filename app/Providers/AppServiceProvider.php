@@ -58,6 +58,9 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
+        // 侧边栏分组枚举（AdminNavigationGroup）Products/Orders 的标签来源
+        \Illuminate\Support\Facades\Lang::addNamespace('ecom', lang_path());
+
         // GA 后台报表：设置页配置的数字 Property ID 运行时注入 spatie/laravel-analytics
         // （直查不进静态缓存：测试进程内 boot 早于用例写库，避免读到过期快照）
         try {

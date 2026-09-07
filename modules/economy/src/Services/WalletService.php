@@ -4,6 +4,7 @@ namespace Modules\Economy\Services;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Modules\Economy\Events\WalletCredited;
 use Modules\Economy\Events\WalletDebited;
 use Modules\Economy\Models\Wallet;
@@ -73,13 +74,15 @@ final class WalletService
 
             $newBalance = (float) $wallet->balance;
 
+            // 余额列是 decimal(18,6)：PHP 浮点运算的误差会在多次累加后漂移，
+            // 每次运算后按存储精度定档，避免误差累积（P3-11）
             if ($type === 'credit') {
-                $newBalance += $amount;
+                $newBalance = round($newBalance + $amount, 6);
             } else {
-                if ($newBalance < $amount) {
+                if (round($newBalance, 6) < round($amount, 6)) {
                     throw new \RuntimeException("余额不足：{$currency} 当前 {$newBalance}，需要 {$amount}");
                 }
-                $newBalance -= $amount;
+                $newBalance = round($newBalance - $amount, 6);
             }
 
             $wallet->update(['balance' => $newBalance]);
@@ -159,11 +162,17 @@ final class WalletService
                 ]);
             }
 
-            $fromNew = (float) $fromWallet->balance - $amount;
-            $toNew = (float) $toWallet->balance + $amount;
+            // 同 apply()：按 decimal(18,6) 的存储精度定档，防浮点漂移
+            $fromNew = round((float) $fromWallet->balance - $amount, 6);
+            $toNew = round((float) $toWallet->balance + $amount, 6);
 
             $fromWallet->update(['balance' => $fromNew]);
             $toWallet->update(['balance' => $toNew]);
+
+            // ref_id 必须每次转账唯一：旧实现固定为 'user:{对方id}'，第二次转账
+            // 就会撞上 wallet_ledger_idempotency 唯一索引，导致同一对用户只能
+            // 转账一次（P3-4）。这里带上转账批次 ID，双方共用同一批次号便于对账。
+            $batch = 'transfer:'.Str::uuid()->toString();
 
             WalletLedger::create([
                 'wallet_id' => $fromWallet->id,
@@ -172,7 +181,7 @@ final class WalletService
                 'amount' => $amount,
                 'balance_after' => $fromNew,
                 'ref_type' => 'transfer',
-                'ref_id' => 'user:'.$toId,
+                'ref_id' => $batch.':out:'.$toId,
                 'remark' => $remark,
             ]);
             WalletLedger::create([
@@ -182,7 +191,7 @@ final class WalletService
                 'amount' => $amount,
                 'balance_after' => $toNew,
                 'ref_type' => 'transfer',
-                'ref_id' => 'user:'.$fromId,
+                'ref_id' => $batch.':in:'.$fromId,
                 'remark' => $remark,
             ]);
         });

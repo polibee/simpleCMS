@@ -126,9 +126,29 @@ final class SidebarManager
         );
     }
 
-    /** 清空区域缓存（后台保存卡片后调用）。 */
+    /**
+     * 清空侧边栏卡片缓存（后台保存卡片后调用）。
+     *
+     * 只清本引擎自己的键。旧实现直接 Cache::flush()，会把整页缓存、
+     * 配置缓存等一并抹掉 —— 保存一张卡片等于全站失缓存（P3-10）。
+     */
     public static function flushCache(): void
     {
-        Cache::flush();
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable(self::TABLE)) {
+                return;
+            }
+
+            $areas = \Illuminate\Support\Facades\DB::table(self::TABLE)
+                ->distinct()
+                ->pluck('area_key');
+        } catch (\Throwable) {
+            $areas = collect();
+        }
+
+        // 兜底：清空当前进程已注册区域的键，避免表中暂无记录时漏清
+        foreach ($areas->push(...array_keys(app(self::class)->areas()))->unique()->filter() as $area) {
+            Cache::forget("sidebar.cards.{$area}");
+        }
     }
 }

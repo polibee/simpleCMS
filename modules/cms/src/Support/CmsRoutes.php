@@ -36,7 +36,9 @@ final class CmsRoutes
         Route::get($uri, [ArticleController::class, 'show'])
             ->name('cms.articles.show')
             ->where($constraints);
+        // 评论提交：限流见 RateLimitServiceProvider（评论默认直接上墙，防脚本刷屏）
         Route::post($uri.'/comments', [CommentController::class, 'store'])
+            ->middleware('throttle:comment')
             ->name('cms.comments.store');
 
         // 游客评论验证码题目

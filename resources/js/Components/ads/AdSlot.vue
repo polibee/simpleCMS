@@ -12,7 +12,7 @@ import CardContent from '@/components/ui/CardContent.vue';
  */
 export interface AdDto {
     id: number;
-    type: 'text' | 'image' | 'html';
+    type: 'text' | 'image' | 'combo' | 'card' | 'html';
     title: string | null;
     text: string | null;
     image_url: string | null;
@@ -108,6 +108,19 @@ const linkAttrs = (ad: AdDto) => ({
                     </div>
                 </component>
                 <span class="absolute right-2 top-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">广告</span>
+            </Card>
+
+            <!-- 文章卡片式广告（图 + 标题 + 文案，与站内文章卡片同风格） -->
+            <Card v-else-if="ad.type === 'card'" class="relative overflow-hidden pt-0">
+                <component :is="ad.link_url ? 'a' : 'div'" v-bind="ad.link_url ? linkAttrs(ad) : {}" class="block">
+                    <img v-if="ad.image_url" :src="ad.image_url" :alt="ad.title ?? '广告'"
+                         class="aspect-video w-full object-cover" loading="lazy">
+                    <div class="p-4">
+                        <p v-if="ad.title" class="font-semibold text-foreground">{{ ad.title }}</p>
+                        <p v-if="ad.text" class="mt-1 text-sm leading-relaxed text-muted-foreground">{{ ad.text }}</p>
+                    </div>
+                </component>
+                <span class="absolute right-2 top-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">赞助内容</span>
             </Card>
 
             <!-- HTML/JS 广告代码（管理端可信输入） -->

@@ -82,4 +82,43 @@ class ShopTest extends ModuleTestCase
         $this->expectException(\RuntimeException::class);
         app(ShopService::class)->checkout($user, $product);
     }
+
+    public function test_inertia_buy_returns_location_redirect_for_external_gateway(): void
+    {
+        $product = $this->product();
+        $user = User::factory()->create();
+
+        // Mock 通道：验证 Inertia XHR 分支（整页跳转收银台，而非 302 被 CORS 拦截）。
+        // 外部网关（xcash/paypal）无真实凭据时走 mock 同样命中同一分支。
+        DB::table('settings')->updateOrInsert(['key' => 'crypto_pay_mock_mode'], ['value' => '1']);
+        \App\Support\SiteSettings::flush();
+
+        $response = $this->actingAs($user)->post('/shop/buy', [
+            'slug' => $product->slug,
+            'method' => 'mock',
+        ], ['X-Inertia' => '1', 'X-Inertia-Version' => '1']);
+
+        // Inertia XHR 请求应返回 409 + X-Inertia-Location（整页跳转收银台），而非 302
+        $response->assertStatus(409);
+        $response->assertHeader('X-Inertia-Location');
+
+        $order = ShopOrder::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('pending', $order->status);
+        $this->assertSame('mock', $order->channel);
+    }
+
+    public function test_product_without_image_uses_default_placeholder(): void
+    {
+        $product = $this->product();
+        $product->update(['image_url' => null]);
+
+        $this->actingAs(User::factory()->create())
+            ->get('/shop/'.$product->slug)
+            ->assertInertia(fn ($page) => $page
+                ->where('product.image_url', url('/images/product-placeholder.svg')));
+
+        $this->get('/shop')
+            ->assertInertia(fn ($page) => $page
+                ->where('products.0.image_url', url('/images/product-placeholder.svg')));
+    }
 }

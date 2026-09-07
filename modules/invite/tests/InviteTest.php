@@ -74,6 +74,24 @@ class InviteTest extends ModuleTestCase
             ])->assertSessionHasErrors(['invite_code']);
     }
 
+    public function test_registration_mode_off_allows_code_free_registration(): void
+    {
+        // 邀请注册关闭（注册限制卡片"不使用"）：无邀请码也能注册
+        \Miran\Mksine\Models\Setting::updateOrCreate(['key' => 'invite_registration_enabled'], ['value' => '0']);
+        \App\Support\SiteSettings::flush();
+
+        $this->assertFalse(\Modules\Invite\Services\InviteService::registrationRequired());
+
+        $this->withSession([\App\Support\Captcha::SESSION_KEY => 42])
+            ->post('/register', [
+                'name' => '开放用户', 'email' => 'open@cmsforum.test',
+                'password' => 'password123', 'password_confirmation' => 'password123',
+                'captcha_answer' => 42,
+            ])->assertRedirect('/');
+
+        $this->assertDatabaseHas('users', ['email' => 'open@cmsforum.test']);
+    }
+
     public function test_gold_purchase_creates_code_and_debits_wallet(): void
     {
         $this->enableSettings();

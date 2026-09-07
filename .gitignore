@@ -33,3 +33,6 @@ Thumbs.db
 # database backups (contain user data + password hashes)
 /storage/app/db-migration
 /storage/app/analytics
+
+# IDE / 工具产物
+/.workbuddy

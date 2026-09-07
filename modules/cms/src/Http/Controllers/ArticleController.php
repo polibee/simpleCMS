@@ -64,12 +64,16 @@ class ArticleController extends Controller
         $context = \Miran\Mksine\Core\Shortcodes\ShortcodeContext::make(post: $post);
 
         // 付费解锁判定（CryptoPay 插件；未启用时全部免费）
+        // 价格来源（优先级从高到低）：正文 [coinpay_buy price="X"] 属性 → crypto_post_prices 表
         $paywalled = false;
         $unlocked = true;
         $price = null;
         if (module_enabled('crypto-pay')) {
             $pay = app(\Modules\CryptoPay\Services\CoinPayService::class);
-            if ($price = $pay->priceFor((int) $post->id)) {
+            $inlinePrice = static::inlineCoinpayPrice((string) $post->content);
+            $price = $inlinePrice ?? $pay->priceFor((int) $post->id);
+
+            if ($price !== null && (float) $price > 0) {
                 $paywalled = true;
                 $unlocked = $pay->hasAccess($request->user(), (int) $post->id);
             }
@@ -81,7 +85,9 @@ class ArticleController extends Controller
         $sectionMode = false;
 
         if ($paywalled && ! $unlocked) {
-            $marker = stripos((string) $post->content, '[coinpay_buy]');
+            // 兼容 [coinpay_buy] 与 [coinpay_buy price="X"] 两种写法
+            preg_match('/\[coinpay_buy[^\]]*\]/i', (string) $post->content, $m, PREG_OFFSET_CAPTURE);
+            $marker = $m[0][1] ?? false;
 
             if ($marker !== false) {
                 // 分段模式：短码前的内容免费
@@ -140,6 +146,24 @@ class ArticleController extends Controller
             // 评论树
             'comments' => app(\Modules\CMS\Services\CommentService::class)->treeFor($post->id),
         ]);
+    }
+
+    /**
+     * 从正文中解析 [coinpay_buy price="X"] 的内联价格（无属性/非法时返回 null）。
+     */
+    private static function inlineCoinpayPrice(string $content): ?float
+    {
+        if (! preg_match('/\[coinpay_buy[^\]]*\]/i', $content, $m)) {
+            return null;
+        }
+
+        if (preg_match('/price\s*=\s*["\']?([0-9]*\.?[0-9]+)["\']?/i', $m[0], $p)) {
+            $value = (float) $p[1];
+
+            return $value > 0 ? round($value, 2) : null;
+        }
+
+        return null;
     }
 
     /**

@@ -25,11 +25,15 @@ class StaticPageController extends Controller
             ->where('enabled', true)
             ->firstOrFail();
 
-        // 兼容两种内容源：基座富文本（HTML）→ 白名单清洗；Markdown → 安全渲染
+        // 兼容两种内容源：基座富文本（HTML）→ 白名单清洗；Markdown → 安全渲染。
+        //
+        // 判定方式修正：旧实现用 str_contains($content, '<') 猜测类型，正文里
+        // 出现 "a < b" 这类纯文本就会被误判为 HTML 并送去清洗（P3-7）。
+        // 改为匹配真正的标签形态，只有确有标签才走清洗分支。
         $content = (string) $page->content;
-        $html = str_contains($content, '<')
+        $html = self::looksLikeHtml($content)
             ? \App\Support\HtmlSanitizer::clean($content)
-            : BioMarkdown::toHtml($content);
+            : (BioMarkdown::toHtml($content) ?? '');
 
         return Inertia::render('CMS/StaticPage', [
             'page' => [
@@ -43,5 +47,13 @@ class StaticPageController extends Controller
                 ? SiteSettings::get('privacy_policy_updated_at', '2026-01-01')
                 : null,
         ]);
+    }
+
+    /**
+     * 内容是否为 HTML（含成对的标签），而非 Markdown 或碰巧带 < 的纯文本。
+     */
+    private static function looksLikeHtml(string $content): bool
+    {
+        return preg_match('/<\/?[a-z][a-z0-9]*(\s[^<>]*)?>/i', $content) === 1;
     }
 }

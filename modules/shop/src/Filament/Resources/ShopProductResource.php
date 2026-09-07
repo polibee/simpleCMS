@@ -20,12 +20,7 @@ class ShopProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static \UnitEnum|string|null $navigationGroup = '商城';
-
-    public static function getNavigationGroup(): ?string
-    {
-        return __('shop::shop.group');
-    }
+    protected static \UnitEnum|string|null $navigationGroup = \Miran\Mksine\Filament\Support\AdminNavigationGroup::Products;
 
     protected static ?int $navigationSort = 1;
 

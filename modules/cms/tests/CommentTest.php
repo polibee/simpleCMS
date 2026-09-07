@@ -124,7 +124,6 @@ class CommentTest extends ModuleTestCase
             ]);
 
         $resp->assertSessionHasErrors(['captcha_answer']);
-        fwrite(STDERR, "\nDEBUG count=".Comment::count());
         $this->assertSame(0, Comment::count());
     }
 

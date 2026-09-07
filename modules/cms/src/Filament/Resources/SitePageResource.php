@@ -20,7 +20,7 @@ class SitePageResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static \UnitEnum|string|null $navigationGroup = '内容';
+    protected static \UnitEnum|string|null $navigationGroup = \Miran\Mksine\Filament\Support\AdminNavigationGroup::Content;
 
     protected static ?int $navigationSort = 4;
 

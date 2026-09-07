@@ -94,9 +94,11 @@ final class SafeHttpClient
 
     private static function request(array $headers = []): PendingRequest
     {
+        // 必须校验 TLS 证书：关闭验证后，网络路径上的中间人可以伪造响应
+        // （例如把 Cloudflare Turnstile 的 {"success":false} 改成 true，
+        // 人机校验即被完全绕过）。重定向上限 3 次，避免重定向型 SSRF。
         return Http::withHeaders($headers)
-            ->maxRedirects(3)
-            ->withoutVerifying(); // 支付等场景的证书验证在渠道层按需开启；默认关闭避免联调受阻
+            ->maxRedirects(3);
     }
 
     /**

@@ -198,13 +198,19 @@ final class CoinPayService
             $checkoutUrl = route('crypto-pay.mock.checkout', ['orderNo' => $orderNo]);
         } elseif ($channel === 'xcash') {
             // Xcash：HMAC 签名创建账单 → pay_url
+            //
+            // 修正两处历史缺陷：
+            // 1) 回调地址曾写成 /crypto-pay/xcash/webhook，而实际注册的是
+            //    /crypto-pay/webhook（CryptoPayPlugin::boot），导致回调 404；
+            // 2) return_url 曾引用不存在的 CmsPostUrlHelper::for()，走到本分支
+            //    必然抛出 Class not found。
             [$invoiceId, $checkoutUrl] = app(XcashClient::class)->createInvoice(
                 $orderNo,
                 'Unlock article: '.mb_substr((string) $post->title, 0, 32),
                 (string) $price,
                 'USD',
-                url('/crypto-pay/xcash/webhook'),
-                url(CmsPostUrlHelper::for($post)),
+                url('/crypto-pay/webhook'),
+                $this->postUrlFor($post),
             );
         } elseif ($this->configured()) {
             $invoices = $this->client()->invoices;
@@ -261,21 +267,24 @@ final class CoinPayService
     // ------------------------------------------------------------------
 
     /**
-     * 标记订单已支付并授予访问权（幂等）。
+     * 标记订单已支付并授予访问权（幂等、并发安全）。
+     *
+     * 用条件更新 `WHERE status != 'paid'` 抢占状态推进：并发回调或
+     * 「webhook + 主动轮询」同时到达时，只有一个请求会真正改到行（P1-2）。
      */
     public function markPaid(CryptoOrder $order, array $payload = []): bool
     {
-        if ($order->status === 'paid') {
-            return false; // 幂等：重复通知不重复处理
-        }
+        $affected = CryptoOrder::query()
+            ->whereKey($order->id)
+            ->where('status', '!=', 'paid')
+            ->update([
+                'status' => 'paid',
+                'paid_at' => now(),
+                'payload' => $payload ?: $order->payload,
+                'updated_at' => now(),
+            ]);
 
-        $order->update([
-            'status' => 'paid',
-            'paid_at' => now(),
-            'payload' => $payload ?: $order->payload,
-        ]);
-
-        return true;
+        return $affected > 0;
     }
 
     /**
@@ -329,5 +338,24 @@ final class CoinPayService
     public function orderByInvoice(string $invoiceId): ?CryptoOrder
     {
         return CryptoOrder::query()->where('invoice_id', $invoiceId)->first();
+    }
+
+    /**
+     * 文章前台地址（支付完成后的同步回跳地址）。
+     *
+     * CMS 模块启用时按其固定链接设置生成；未启用时回退到内核默认文章路由。
+     * 不引入 cms 模块内部类的硬依赖，避免模块未启用时抛出类不存在。
+     */
+    private function postUrlFor(Post $post): string
+    {
+        if (module_enabled('cms') && class_exists(\Modules\CMS\Support\CmsPermalink::class)) {
+            try {
+                return url(\Modules\CMS\Support\CmsPermalink::postUrl($post));
+            } catch (\Throwable) {
+                // 固定链接设置异常时回退
+            }
+        }
+
+        return url('/post/'.$post->slug);
     }
 }

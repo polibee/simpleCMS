@@ -1,58 +1,121 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CMSForum
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+以 **Laravel 13 + Filament 5 + Inertia/Vue 3** 构建的插件化内容社区平台（CMS + BBS）。
 
-## About Laravel
+底层 CMS 能力由 [`miran/mksine`](https://github.com/miransalehi/mksine) v1.4.0 内核提供（文章、分类、媒体库、菜单、设置、插件/主题/钩子/短码系统），业务功能以**可插拔模块**的形式叠加在内核之上。
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+> 📦 生产部署请直接阅读 **[《生产部署手册》](docs/DEPLOYMENT.md)**（环境要求、Nginx/HTTPS、队列调度、Redis/Octane、安全加固、升级备份、常见故障）。
+> 📖 完整项目文档见 **[《项目文档》](docs/项目文档.md)**（架构、模块、数据模型、路由、支付、性能、运维、二次开发指南）。
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 功能亮点
 
-## Learning Laravel
+- **插件化架构**：9 个业务模块可独立安装 / 启用 / 停用 / 卸载（`modules/`）
+- **统一支付网关**：码支付 / 虎皮椒 / PayPal / Xcash（加密）/ Mock 多通道并存，用户前台自选
+- **付费阅读**：正文插入 `[coinpay_buy price="4.99"]` 即分段付费；后台「内容 → 付费文章」统一定价
+- **内容社区**：文章 / 分类 / 评论 / 单页 / 轮播图 / 搜索 / RSS / Sitemap / 定时发布
+- **创作中心**：前台写作、富文本编辑、个人设置、作者中心
+- **经济系统**：多币种钱包、签到 / 发布奖励、邀请码（金币 / 加密购买 / 注册核销）
+- **商城**：商品 / 库存（下单预占防超卖）/ 订单 / 多形态交付（下载 / 内容 / 邀请码）
+- **多语言**：系统 + 模块均带 `en` / `zh_CN` 语言包，后台可切换
+- **性能**：整页缓存（WP Super Cache 式）、Redis / OPcache / Octane / Horizon 可选接入
+- **安全**：邮箱白名单、邀请注册（可强制）、Turnstile / 算术验证码、登录 / 注册 / 评论 / 签到全限流、富文本输出白名单清洗、支付回调幂等
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 技术栈
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+| 层 | 组件 |
+| --- | --- |
+| 后端 | PHP ^8.3 · Laravel 13.27 · Filament 5.7 · Livewire 4.4 · miran/mksine 1.4 · Filament Shield 4.3 · spatie/laravel-permission 8.3 |
+| 前台 | Vue 3.5 · Inertia 3.7 · Vite 8 · Tailwind CSS 4 · TypeScript |
+| 基础设施 | Horizon 5.48 · Octane 2.19 · Redis（可选）· CoinPayments SDK |
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## 快速开始（开发环境）
 
 ```bash
-composer require laravel/boost --dev
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --force
+npm install --ignore-scripts && npm run build
 
-php artisan boost:install
+# 创建管理员（账号密码来自 .env）
+php artisan db:seed --class=AdminAccountSeeder
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`.env` 需配置：
 
-## Contributing
+```dotenv
+ADMIN_DEFAULT_EMAIL=admin@cmsforum.test
+ADMIN_DEFAULT_PASSWORD=<your-password>
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+一行启动开发环境（server + queue + logs + vite）：
 
-## Code of Conduct
+```bash
+composer dev
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+后台入口：`/admin`
 
-## Security Vulnerabilities
+## 模块
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+业务能力全部模块化，位于 `modules/`，可独立安装 / 启用 / 停用 / 卸载。
+
+| 模块 | 能力 | 依赖 |
+| --- | --- | --- |
+| `user` | 用户资料、注册流程（邮箱验证码 / 域名白名单 / 邀请注册） | — |
+| `cms` | 固定链接、分类页、搜索、RSS、Sitemap、单页、轮播图、评论、创作中心 | `user` |
+| `economy` | 多币种钱包（金/银/铜）、幂等流水账 | `user` |
+| `quest` | 每日签到、发布奖励 | `user`、`economy` |
+| `crypto-pay` | 付费阅读 + 统一支付网关（码支付/虎皮椒/PayPal/Xcash/Mock） | — |
+| `shop` | 商品、库存、订单、多种发货方式 | — |
+| `invite` | 邀请码生成 / 金币或加密购买 / 注册核销 | — |
+| `ads` | 11 个投放位置的广告管理 | — |
+| `performance` | 整页缓存、命中统计、Redis/OPcache/Octane/Horizon 探测 | — |
+
+激活顺序建议 `user` → `economy` → `quest` → `cms` → 其余：
+
+```bash
+php artisan mks-plugin:discover
+php artisan mks-plugin:install user && php artisan mks-plugin:activate user
+php artisan mks-plugin:migrate user
+```
+
+## 测试
+
+```bash
+php artisan test
+```
+
+测试数据库为 MySQL `cmsforum_test`（见 `phpunit.xml`），模块测试基于 `Modules\Tests\ModuleTestCase`（SAVEPOINT 事务回滚，不污染开发库）。
+
+## 常用命令
+
+```bash
+php artisan mks-plugin:list --status=active   # 插件状态
+php artisan mks:discover                      # 钩子发现
+php artisan schedule:work                     # 定时发布依赖它（每分钟）
+php artisan queue:work --tries=3
+php artisan test
+```
+
+## 目录速览
+
+```
+app/        应用层：侧边栏引擎、站点设置、备份/打包、后台页面、策略
+modules/    9 个业务插件（plugin.php 清单 + 各自迁移/路由/模型/后台资源/前端页面）
+config/     mksine.php 为内核总配置（690 行，含逐段中文注释）
+docs/       项目文档、部署手册、设计稿、支付 SDK、安全审计报告
+```
+
+## 文档
+
+- **[《生产部署手册》](docs/DEPLOYMENT.md)** — 环境要求、Nginx/HTTPS、队列调度、Redis/Octane、安全加固、升级备份、常见故障
+- **[《项目文档》](docs/项目文档.md)** — 架构、模块详解、数据模型、路由清单、权限、支付、性能与缓存、运维、二次开发
+- [《安全与代码审计报告》](docs/安全与代码审计报告.md) — 白盒审计结论与修复状态
+- [架构设计稿](docs/开发文档.md) · [模块化开发文档](docs/工程化模块化开发文档.md) · [CMS/论坛设计](docs/cms和forum设计.md) · [Xcash 对接协议](docs/xcash.md)
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+本项目基于 Laravel，遵循 [MIT 许可](https://opensource.org/licenses/MIT)。

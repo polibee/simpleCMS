@@ -26,6 +26,10 @@ final class ShopService
     /**
      * 创建支付订单，返回 [ShopOrder, payUrl, kind]。
      *
+     * 库存采用「下单即预占」：在同一事务内行锁商品、校验并扣减库存，
+     * 支付回调只推进订单状态、不再二次扣减。旧实现下单时不预占、支付时才扣，
+     * 库存为 1 时两个用户可同时下单并各自付款，造成超卖（P1-3）。
+     *
      * @param  string|null  $method  用户选择的支付方式（alipay/wxpay），仅 CNY 通道有效
      * @return array{0: ShopOrder, 1: string, 2: string}
      *
@@ -33,67 +37,134 @@ final class ShopService
      */
     public function checkout(Authenticatable $user, ShopProduct $product, ?string $method = null): array
     {
-        if ($product->status !== 'on_sale') {
-            throw new \RuntimeException('商品当前未上架。');
-        }
-
-        if ($product->stock < 1) {
-            throw new \RuntimeException('商品已售罄。');
-        }
+        // 先把超时的待付订单库存放回去，避免长期占用（无需额外的调度器也自愈）
+        $this->releaseExpired($product);
 
         $orderNo = 'SHOP-'.strtoupper(Str::random(12));
 
-        [$channel, $invoiceId, $payUrl, $kind] = array_values(PaymentGateway::checkout(
-            $orderNo,
-            'Shop: '.mb_substr($product->name, 0, 100),
-            (float) $product->price,
-            $product->currency,
-            [
-                'notify' => url('/shop/notify'),
-                'return' => url('/shop/paypal/return'),
-                'cancel' => url('/shop'),
-                'mock' => route('shop.mock.checkout', ['orderNo' => $orderNo]),
-            ],
-            $method,
-        ));
+        // 预占库存（行锁 + 条件扣减，原子）
+        $reserved = DB::transaction(function () use ($product) {
+            $fresh = ShopProduct::query()
+                ->whereKey($product->id)
+                ->lockForUpdate()
+                ->first();
 
-        $order = ShopOrder::create([
-            'order_no' => $orderNo,
-            'user_id' => $user->getAuthIdentifier(),
-            'product_id' => $product->id,
-            'amount' => $product->price,
-            'currency' => $product->currency,
-            'quantity' => 1,
-            'channel' => $channel,
-            'invoice_id' => $invoiceId,
-            'checkout_url' => $payUrl,
-            'status' => 'pending',
-        ]);
+            if (! $fresh || $fresh->status !== 'on_sale') {
+                throw new \RuntimeException('商品当前未上架。');
+            }
+
+            if ((int) $fresh->stock < 1) {
+                throw new \RuntimeException('商品已售罄。');
+            }
+
+            return ShopProduct::query()
+                ->whereKey($product->id)
+                ->where('stock', '>', 0)
+                ->decrementEach(['stock' => 1]) > 0;
+        });
+
+        if (! $reserved) {
+            throw new \RuntimeException('商品已售罄。');
+        }
+
+        try {
+            [$channel, $invoiceId, $payUrl, $kind] = array_values(PaymentGateway::checkout(
+                $orderNo,
+                'Shop: '.mb_substr($product->name, 0, 100),
+                (float) $product->price,
+                $product->currency,
+                [
+                    'notify' => url('/shop/notify'),
+                    'return' => url('/shop/paypal/return'),
+                    'cancel' => url('/shop'),
+                    'mock' => route('shop.mock.checkout', ['orderNo' => $orderNo]),
+                ],
+                $method,
+            ));
+
+            $order = ShopOrder::create([
+                'order_no' => $orderNo,
+                'user_id' => $user->getAuthIdentifier(),
+                'product_id' => $product->id,
+                'amount' => $product->price,
+                'currency' => $product->currency,
+                'quantity' => 1,
+                'channel' => $channel,
+                'invoice_id' => $invoiceId,
+                'checkout_url' => $payUrl,
+                'status' => 'pending',
+            ]);
+        } catch (\Throwable $e) {
+            // 下单失败（网关异常/未配置）→ 归还预占的库存
+            ShopProduct::query()->whereKey($product->id)->incrementEach(['stock' => 1]);
+
+            throw $e;
+        }
 
         return [$order, $payUrl, $kind];
     }
 
-    /** 支付成功：标记订单 + 扣库存 + 累计销量 + 执行交付（幂等）。 */
-    public function markPaid(ShopOrder $order): bool
+    /**
+     * 释放超时的待付订单库存（默认 30 分钟未支付即回收）。
+     *
+     * @return int 释放的订单数
+     */
+    public function releaseExpired(?ShopProduct $product = null, int $minutes = 30): int
     {
-        if ($order->status === 'paid') {
-            return false;
+        $query = ShopOrder::query()
+            ->where('status', 'pending')
+            ->where('created_at', '<', now()->subMinutes($minutes));
+
+        if ($product !== null) {
+            $query->where('product_id', $product->id);
         }
 
-        DB::transaction(function () use ($order) {
-            $order->forceFill([
-                'status' => 'paid',
-                'paid_at' => now(),
-            ])->save();
+        $orders = $query->get();
 
-            ShopProduct::query()
-                ->whereKey($order->product_id)
-                ->where('stock', '>', 0)
-                ->decrementEach(['stock' => 1]);
-            ShopProduct::query()
-                ->whereKey($order->product_id)
-                ->incrementEach(['sold' => 1]);
+        foreach ($orders as $order) {
+            DB::transaction(function () use ($order) {
+                // 条件更新占位：只有仍是 pending 的订单才会释放，避免与支付回调用时冲撞
+                $affected = ShopOrder::query()
+                    ->whereKey($order->id)
+                    ->where('status', 'pending')
+                    ->update(['status' => 'failed', 'updated_at' => now()]);
+
+                if ($affected > 0) {
+                    ShopProduct::query()->whereKey($order->product_id)->incrementEach(['stock' => 1]);
+                }
+            });
+        }
+
+        return $orders->count();
+    }
+
+    /**
+     * 支付成功：标记订单 + 累计销量 + 执行交付（幂等）。
+     *
+     * 并发安全：用条件更新 `WHERE status = 'pending'` 抢占状态推进，
+     * 只有抢到的那个请求才会继续发货；并发回调不会重复发货（P1-2）。
+     * 库存在下单时已预占，此处不再扣减。
+     */
+    public function markPaid(ShopOrder $order): bool
+    {
+        $affected = DB::transaction(function () use ($order) {
+            $affected = ShopOrder::query()
+                ->whereKey($order->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
+
+            if ($affected > 0) {
+                ShopProduct::query()
+                    ->whereKey($order->product_id)
+                    ->incrementEach(['sold' => 1]);
+            }
+
+            return $affected;
         });
+
+        if ($affected === 0) {
+            return false; // 已被其它请求推进（重复回调 / 并发回跳）
+        }
 
         $this->deliver($order->fresh());
 
@@ -137,11 +208,19 @@ final class ShopService
         }
 
         try {
+            // source 必须是 invite_codes.source 枚举内的值（admin|gold|crypto）；
+            // 旧实现传 'shop_purchase' 会在严格模式下触发数据截断，被 catch 吞掉，
+            // 结果是买家已付款却只拿到错误信息（P3-3）。商城购买归入 crypto 来源。
             $codes = app(\Modules\Invite\Services\InviteService::class)
-                ->generate(1, 'shop_purchase', $order->user_id);
+                ->generate(1, 'crypto', $order->user_id, null, (float) $order->amount);
 
             return ['type' => 'invite_code', 'code' => $codes[0]->code];
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('商城邀请码发货失败', [
+                'order_no' => $order->order_no,
+                'error' => $e->getMessage(),
+            ]);
+
             return ['type' => 'invite_code', 'code' => null, 'error' => $e->getMessage()];
         }
     }

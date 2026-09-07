@@ -74,23 +74,43 @@ final class InviteService
         }
     }
 
-    /** 注册成功后核销（幂等：已使用直接返回）。 */
-    public function consume(string $code, int $userId): void
+    /**
+     * 注册成功后核销（原子）。
+     *
+     * 用条件更新抢占 `status = 'active'`：并发注册同一枚码时只有一个请求
+     * 能改到行，其余受影响行数为 0 直接返回。旧实现先查后写，两个请求会同时
+     * 读到 active 并双双核销成功，一枚码可注册多个账号（P1-4）。
+     *
+     * @return bool 是否由本次调用完成核销
+     */
+    public function consume(string $code, int $userId): bool
     {
-        $invite = InviteCode::query()
+        $affected = InviteCode::query()
             ->where('code', strtoupper(trim($code)))
             ->where('status', 'active')
-            ->first();
+            ->update([
+                'status' => 'used',
+                'used_by' => $userId,
+                'used_at' => now(),
+            ]);
 
-        if (! $invite) {
-            return;
+        return $affected > 0;
+    }
+
+    /**
+     * 校验并立即核销（原子，消除 validate → consume 之间的 TOCTOU 窗口）。
+     *
+     * @throws ValidationException 邀请码无效、已使用或已过期
+     */
+    public function consumeForRegistration(?string $code, int $userId): void
+    {
+        $code = trim((string) $code);
+
+        if ($code === '' || ! $this->consume($code, $userId)) {
+            throw ValidationException::withMessages([
+                'invite_code' => '邀请码无效、已使用或已过期。',
+            ]);
         }
-
-        $invite->forceFill([
-            'status' => 'used',
-            'used_by' => $userId,
-            'used_at' => now(),
-        ])->save();
     }
 
     /** 注册是否需要邀请码（模块启用且后台开关开启）。 */
@@ -196,23 +216,28 @@ final class InviteService
         return [$order, $payUrl, $kind];
     }
 
-    /** 标记订单已支付并发放邀请码（幂等）。 */
+    /**
+     * 标记订单已支付并发放邀请码（幂等）。
+     *
+     * 并发安全：条件更新 `WHERE status = 'pending'` 抢占状态推进，
+     * 只有抢到者才发放邀请码，避免重复回调导致重复发放（P1-2）。
+     */
     public function markOrderPaid(InviteOrder $order): bool
     {
-        if ($order->status === 'paid') {
-            return false;
-        }
+        $affected = DB::transaction(function () use ($order) {
+            $affected = InviteOrder::query()
+                ->whereKey($order->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
 
-        DB::transaction(function () use ($order) {
-            $order->forceFill([
-                'status' => 'paid',
-                'paid_at' => now(),
-            ])->save();
+            if ($affected > 0) {
+                $this->generate(1, 'crypto', (int) $order->user_id, null, (float) $order->amount);
+            }
 
-            $this->generate(1, 'crypto', (int) $order->user_id, null, $order->amount);
+            return $affected;
         });
 
-        return true;
+        return $affected > 0;
     }
 
     // ------------------------------------------------------------------

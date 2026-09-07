@@ -83,7 +83,12 @@ class BackupManagerPage extends Page
     // 备份
     // ------------------------------------------------------------------
 
-    public function backup(): void
+    /**
+     * 执行一次备份。
+     *
+     * @param  string|null  $suffix  自定义文件名后缀（恢复前的自动快照用）
+     */
+    public function backup(?string $suffix = null): void
     {
         $dir = $this->backupDir();
         if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
@@ -92,7 +97,7 @@ class BackupManagerPage extends Page
             return;
         }
 
-        $target = $dir.'/backup-'.date('Ymd-His').'.sql';
+        $target = $dir.'/backup-'.($suffix ?: date('Ymd-His')).'.sql';
         $database = config('database.connections.mysql.database');
 
         $cnf = $this->writeTempCnf();
@@ -104,12 +109,14 @@ class BackupManagerPage extends Page
         $cnfArg = str_replace('\\', '/', $cnf);
         $targetArg = str_replace('\\', '/', $target);
 
-        // stdout 重定向到备份文件（Windows cmd 引号安全）
-        $result = Process::fromShellCommandline(
-            '"'.$binary.'" --defaults-extra-file="'.$cnfArg.'" --single-transaction --databases '.$database.' > "'.$targetArg.'"',
-        )->setTimeout(300)->run();
-
-        @unlink($cnf);
+        try {
+            // stdout 重定向到备份文件（Windows cmd 引号安全）；库名加反引号
+            $result = Process::fromShellCommandline(
+                '"'.$binary.'" --defaults-extra-file="'.$cnfArg.'" --single-transaction --databases `'.str_replace('`', '\\`', (string) $database).'` > "'.$targetArg.'"',
+            )->setTimeout(300)->run();
+        } finally {
+            @unlink($cnf);
+        }
 
         if (! $result->successful() || ! is_file($target) || filesize($target) < 100) {
             @unlink($target);
@@ -118,7 +125,12 @@ class BackupManagerPage extends Page
             return;
         }
 
-        $this->notify('备份完成：'.basename($target).'（'.round(filesize($target) / 1024, 1).' KB）', 'success');
+        @chmod($target, 0600); // 备份含全量数据，禁止其它本地用户读取
+
+        // 自动快照不需要打扰用户（它是恢复流程的一部分）
+        if ($suffix === null) {
+            $this->notify('备份完成：'.basename($target).'（'.round(filesize($target) / 1024, 1).' KB）', 'success');
+        }
     }
 
     public function download(string $name): ?BinaryFileResponse
@@ -151,9 +163,8 @@ class BackupManagerPage extends Page
             return;
         }
 
-        if (! $this->confirmRestore($name)) {
-            return;
-        }
+        // 破坏性操作：导入前先自动做一份快照，保证可回滚
+        $this->backup('restore-'.date('Ymd-His'));
 
         $cnf = $this->writeTempCnf();
         if (! $cnf) {
@@ -165,26 +176,33 @@ class BackupManagerPage extends Page
         $cnfArg = str_replace('\\', '/', $cnf);
         $pathArg = str_replace('\\', '/', $path);
 
-        // dump 含 CREATE DATABASE/USE，stdin 导入本实例
-        $result = Process::fromShellCommandline(
-            '"'.$binary.'" --defaults-extra-file="'.$cnfArg.'" < "'.$pathArg.'"',
-        )->setTimeout(600)->run();
-
-        @unlink($cnf);
+        try {
+            // 库名加反引号：含特殊字符的库名不会破坏命令行结构
+            $result = Process::fromShellCommandline(
+                '"'.$binary.'" --defaults-extra-file="'.$cnfArg.'" `'.str_replace('`', '\\`', (string) $database).'` < "'.$pathArg.'"',
+            )->setTimeout(600)->run();
+        } finally {
+            // 无论成功失败、是否超时，都必须抹掉明文凭据文件
+            @unlink($cnf);
+        }
 
         if (! $result->successful()) {
-            $this->notify('恢复失败：'.mb_substr($result->errorOutput() ?: $result->output(), 0, 200), 'danger');
+            // 只给简短摘要，避免把可能含敏感信息的 stderr 完整回显
+            $this->notify('恢复失败，详见日志（logs/laravel.log）', 'danger');
+            \Illuminate\Support\Facades\Log::error('数据库恢复失败', [
+                'file' => $name,
+                'output' => mb_substr($result->errorOutput() ?: $result->output(), 0, 2000),
+            ]);
 
             return;
         }
 
-        $this->notify('恢复完成（'.$name.'），请重新登录刷新权限缓存。', 'success');
-    }
+        \Illuminate\Support\Facades\Log::warning('管理员执行了数据库恢复', [
+            'file' => $name,
+            'user_id' => auth()->id(),
+        ]);
 
-    /** 恢复二次确认（Livewire 弹窗由 blade wire:confirm 实现）。 */
-    private function confirmRestore(string $name): bool
-    {
-        return true;
+        $this->notify('恢复完成（'.$name.'），导入前已自动生成快照，请重新登录刷新权限缓存。', 'success');
     }
 
     // ------------------------------------------------------------------
@@ -193,14 +211,16 @@ class BackupManagerPage extends Page
 
     private function backupDir(): string
     {
-        return storage_path('app/backups');
+        return (string) (config('backup.disk_dir') ?: storage_path('app/backups'));
     }
 
     private function guardPath(string $name): ?string
     {
+        $dir = realpath($this->backupDir());
         $path = realpath($this->backupDir().'/'.$name);
 
-        if (! $path || ! str_starts_with($path, realpath($this->backupDir())) || ! is_file($path)) {
+        // 目录前缀比较必须带分隔符：否则同级的 backups-evil/x.sql 也会通过
+        if ($dir === false || ! $path || ! str_starts_with($path, $dir.DIRECTORY_SEPARATOR) || ! is_file($path)) {
             $this->notify('无效的备份文件', 'danger');
 
             return null;
@@ -209,15 +229,35 @@ class BackupManagerPage extends Page
         return $path;
     }
 
-    /** Laragon bin 下查找 mysqldump/mysql（遍历版本目录）。 */
+    /**
+     * 定位 mysqldump / mysql 可执行文件。
+     *
+     * 搜索路径由 config/backup.php 的 binaries 与 env 控制，不再硬编码开发机目录
+     * （原实现写死本机 Laragon 的 mysql bin 通配路径，仅在本机可用）。
+     */
     private function binaryPath(string $tool): string
     {
-        $candidates = glob('D:/laragon/bin/mysql/*/bin/'.$tool.'.exe') ?: [];
+        $configured = config('backup.binaries.'.$tool);
 
-        return $candidates[0] ?? $tool; // 兜底交给 PATH
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        foreach ((array) config('backup.search_paths', []) as $pattern) {
+            $candidates = glob(str_replace('{tool}', $tool, (string) $pattern)) ?: [];
+            if ($candidates !== []) {
+                return $candidates[0];
+            }
+        }
+
+        return $tool; // 兜底交给 PATH
     }
 
-    /** 临时 defaults-extra-file：凭据不出现在命令行。 */
+    /**
+     * 临时 defaults-extra-file：凭据不出现在命令行。
+     *
+     * 文件以 0600 写入，且调用方必须在 finally 中 unlink（超时/异常也不留明文）。
+     */
     private function writeTempCnf(): ?string
     {
         $conn = config('database.connections.mysql');
@@ -229,7 +269,7 @@ class BackupManagerPage extends Page
 
         $content = "[client]\nuser=".$conn['username']."\n";
         if (! empty($conn['password'])) {
-            $content .= 'password="'.$conn['password']."\"\n";
+            $content .= 'password="'.str_replace('"', '\\"', (string) $conn['password'])."\"\n";
         }
         $content .= 'host='.($conn['host'] ?? '127.0.0.1')."\n";
         $content .= 'port='.($conn['port'] ?? 3306)."\n";
@@ -239,6 +279,8 @@ class BackupManagerPage extends Page
 
             return null;
         }
+
+        @chmod($cnfPath, 0600);
 
         return $cnfPath;
     }
